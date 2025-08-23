@@ -3,8 +3,8 @@ import { Sword, Zap, Droplets, Mountain, Wind, Clock, Move3D, Sparkles, Dice6 } 
 
 const ElementalistSheet = () => {
   // Character stats
-  const [level, setLevel] = useState(14);
-  const [proficiencyBonus, setProficiencyBonus] = useState(5);
+  const [level, setLevel] = useState(8);
+  const [proficiencyBonus, setProficiencyBonus] = useState(3);
   const [wisdomMod, setWisdomMod] = useState(4);
   const [dexMod, setDexMod] = useState(4);
   const [spellAttackBonus, setSpellAttackBonus] = useState(12);
@@ -19,15 +19,15 @@ const ElementalistSheet = () => {
   const [usedElements, setUsedElements] = useState([]);
   
   // Morphblade state
-  const [installedOrbs, setInstalledOrbs] = useState(['fire', 'air', 'earth', 'water']);
-  const [activeOrb, setActiveOrb] = useState('fire');
+  const [installedOrbs, setInstalledOrbs] = useState(['air', 'earth']);
+  const [activeOrb, setActiveOrb] = useState('air');
   const [weaponForm, setWeaponForm] = useState('sword');
   const [bladeSeparated, setBladeSeparated] = useState(false);
   const [hammerGrip, setHammerGrip] = useState('one-handed');
   
   // Pendant state
-  const [pendantCharges, setPendantCharges] = useState(20);
-  const [pendantState, setPendantState] = useState('exalted');
+  const [pendantCharges, setPendantCharges] = useState(8);
+  const [pendantState, setPendantState] = useState('dormant');
   
   // Wild Shape state
   const [wildShapeUses, setWildShapeUses] = useState(2);
@@ -52,6 +52,57 @@ const ElementalistSheet = () => {
   const [showSpellModal, setShowSpellModal] = useState(false);
   const [showCastModal, setShowCastModal] = useState(false);
   const [spellToCast, setSpellToCast] = useState(null);
+
+  const requestCast = (spellName) => {
+    if (isPendantSpell(spellName)) {
+      const { min, max } = getPendantChargeRange(spellName);
+
+      // Si hay definición de costes y al menos el mínimo es > 0, intentamos vía cargas
+      if (min > 0 && max >= min) {
+        if (pendantCharges < min) {
+          // Sin cargas suficientes: caemos al flujo normal de slots
+          setSpellToCast(spellName);
+          setShowCastModal(true);
+          return;
+        }
+
+        let chosen = min;
+        if (min !== max) {
+          const resp = window.prompt(
+            `${spellName} (${min}-${max} cargas).\n` +
+            `Tienes ${pendantCharges} cargas.\n` +
+            `¿Cuántas cargas quieres gastar?`,
+            String(min)
+          );
+          if (resp === null) return; // cancelado
+          chosen = parseInt(resp, 10);
+          if (!Number.isFinite(chosen)) {
+            alert('Entrada no válida.');
+            return;
+          }
+        }
+
+        if (chosen < min || chosen > max) {
+          alert(`Debes gastar entre ${min} y ${max} cargas para ${spellName}.`);
+          return;
+        }
+        if (pendantCharges < chosen) {
+          alert(`No tienes suficientes cargas: necesitas ${chosen}, tienes ${pendantCharges}.`);
+          return;
+        }
+
+        // Lanza por cargas: castSpell ya detecta pendiente y NO gasta slot
+        const effectiveSlot = getPendantEffectiveSlot(chosen);
+        castSpell(spellName, effectiveSlot);
+        return; // no abrimos modal
+      }
+      // Si no hay coste definido, caemos a slots
+    }
+
+    // Flujo normal (slots)
+    setSpellToCast(spellName);
+    setShowCastModal(true);
+  };
 
   const elements = {
     fire: { 
@@ -115,7 +166,7 @@ const ElementalistSheet = () => {
       icon: <Sparkles className="w-4 h-4" />, 
       color: 'text-purple-500',
       spells: {
-        3: ['Sorcerous Burst', 'Chromatic Orb', "Dragon's Breath"],
+        3: ['Sorcerous Burst', 'Absorb Elements', "Dragon's Breath"],
         5: ['Protection from Energy'],
         7: ['Conjure Elemental Guardians'],
         9: ['Wrath of the Elements']
@@ -141,7 +192,7 @@ const ElementalistSheet = () => {
     space: { 
       name: 'Espacio', 
       icon: <Move3D className="w-4 h-4" />, 
-      color: 'text-gray-500',
+      color: 'text-gray-900',
       spells: {
         3: ['Sapping Sting', 'Magnify Gravity', 'Immovable Object'],
         5: ['Pulse Wave'],
@@ -523,6 +574,186 @@ const ElementalistSheet = () => {
       components: "V, S, M (a black marble)",
       duration: "Instantaneous",
       description: "A 20-foot-radius sphere of crushing force forms at a point you can see within range and tugs at the creatures there. Each creature in the sphere must make a Constitution saving throw. On a failed save, the creature takes 5d10 force damage, and is pulled in a straight line toward the center of the sphere, ending in an unoccupied space as close to the center as possible (even if that space is in the air). On a successful save, the creature takes half as much damage and isn't pulled.\n\nAt Higher Levels. When you cast this spell using a spell slot of 5th level or higher, the damage increases by 1d10 for each slot level above 4th."
+    },
+    "Guidance": { 
+      level: "Cantrip", 
+      school: "Divination", 
+      castingTime: "Action", 
+      range: "Touch", 
+      components: "V, S", 
+      duration: "Concentration, up to 1 minute", 
+      description: "You touch a willing creature and choose a skill. Until the spell ends, the creature adds 1d4 to any ability check using the chosen skill."
+    },
+    "Druidcraft": { 
+      level: "Cantrip", 
+      school: "Transmutation", 
+      castingTime: "Action", 
+      range: "30 feet", 
+      components: "V, S", 
+      duration: "Instantaneous", 
+      description: "Whispering to the spirits of nature, you create one of the following effects within range.\n\nWeather Sensor. You create a Tiny, harmless sensory effect that predicts what the weather will be at your location for the next 24 hours. The effect might manifest as a golden orb for clear skies, a cloud for rain, falling snowflakes for snow, and so on. This effect persists for 1 round.\n\nBloom. You instantly make a flower blossom, a seed pod open, or a leaf bud bloom.\n\nSensory Effect. You create a harmless sensory effect, such as falling leaves, spectral dancing fairies, a gentle breeze, the sound of an animal, or the faint odor of skunk. The effect must fit in a 5-foot Cube.\n\nFire Play. You light or snuff out a candle, a torch, or a campfire."
+    },
+    "Resistance": { 
+      level: "Cantrip", 
+      school: "Abjuration", 
+      castingTime: "Action", 
+      range: "Touch", 
+      components: "V, S", 
+      duration: "Concentration, up to 1 minute", 
+      description: "You touch a willing creature and choose a damage type: Acid, Bludgeoning, Cold, Fire, Lightning, Necrotic, Piercing, Poison, Radiant, Slashing, or Thunder. When the creature takes damage of the chosen type before the spell ends, the creature reduces the total damage taken by 1d4. A creature can benefit from this spell only once per turn."
+    },
+    "Message": { 
+      level: "Cantrip", 
+      school: "Transmutation", 
+      castingTime: "Action", 
+      range: "120 feet", 
+      components: "S, M (a copper wire)", 
+      duration: "1 round", 
+      description: "You point toward a creature within range and whisper a message. The target (and only the target) hears the message and can reply in a whisper that only you can hear.\n\nYou can cast this spell through solid objects if you are familiar with the target and know it is beyond the barrier. Magical silence; 1 foot of stone, metal, or wood; or a thin sheet of lead blocks the spell."
+    },
+    "Create Bonfire": { 
+      level: "Cantrip", 
+      school: "Conjuration", 
+      castingTime: "Action", 
+      range: "60 feet", 
+      components: "V, S", 
+      duration: "Concentration, up to 1 minute", 
+      description: "You create a bonfire on ground that you can see within range. Until the spell ends, the magic bonfire fills a 5-foot cube. Any creature in the bonfire's space when you cast the spell must succeed on a Dexterity saving throw or take 1d8 fire damage. A creature must also make the saving throw when it moves into the bonfire's space for the first time on a turn or ends its turn there.\n\nThe bonfire ignites flammable objects in its area that aren't being worn or carried.\n\nThe spell's damage increases by 1d8 when you reach 5th level (2d8), 11th level (3d8), and 17th level (4d8)."
+    },
+    "Detect Magic": { 
+      level: "1st", 
+      school: "Divination", 
+      castingTime: "Action or Ritual", 
+      range: "Self", 
+      components: "V, S", 
+      duration: "Concentration, up to 10 minutes", 
+      description: "For the duration, you sense the presence of magical effects within 30 feet of yourself. If you sense such effects, you can take the Magic action to see a faint aura around any visible creature or object in the area that bears the magic, and if an effect was created by a spell, you learn the spell's school of magic.\n\nThe spell is blocked by 1 foot of stone, dirt, or wood; 1 inch of metal; or a thin sheet of lead."
+    },
+    "Cure Wounds": { 
+      level: "1st", 
+      school: "Abjuration", 
+      castingTime: "Action", 
+      range: "Touch", 
+      components: "V, S", 
+      duration: "Instantaneous", 
+      description: "A creature you touch regains a number of Hit Points equal to 2d8 plus your spellcasting ability modifier.\n\nUsing a Higher-Level Spell Slot. The healing increases by 2d8 for each spell slot level above 1."
+    },
+    "Faerie Fire": { 
+      level: "1st", 
+      school: "Evocation", 
+      castingTime: "Action", 
+      range: "60 feet", 
+      components: "V", 
+      duration: "Concentration, up to 1 minute", 
+      description: "Objects in a 20-foot Cube within range are outlined in blue, green, or violet light (your choice). Each creature in the Cube is also outlined if it fails a Dexterity saving throw. For the duration, objects and affected creatures shed Dim Light in a 10-foot radius and can't benefit from the Invisible condition.\n\nAttack rolls against an affected creature or object have Advantage if the attacker can see it."
+    },
+    "Healing Word": { 
+      level: "1st", 
+      school: "Abjuration", 
+      castingTime: "Bonus action", 
+      range: "60 feet", 
+      components: "V", 
+      duration: "Instantaneous", 
+      description: "A creature of your choice that you can see within range regains Hit Points equal to 2d4 plus your spellcasting ability modifier.\n\nUsing a Higher-Level Spell Slot. The healing increases by 2d4 for each spell slot level above 1."
+    },
+    "Continual Flame": { 
+      level: "2nd", 
+      school: "Evocation", 
+      castingTime: "Action", 
+      range: "Touch", 
+      components: "V, S, M (ruby dust worth 50+ GP, which the spell consumes)", 
+      duration: "Until dispelled", 
+      description: "A flame springs from an object that you touch. The effect casts Bright Light in a 20-foot radius and Dim Light for an additional 20 feet. It looks like a regular flame, but it creates no heat and consumes no fuel. The flame can be covered or hidden but not smothered or quenched."
+    },
+    "Earthbind": { 
+      level: "2nd", 
+      school: "Transmutation", 
+      castingTime: "Action", 
+      range: "300 feet", 
+      components: "V", 
+      duration: "Concentration, up to 1 minute", 
+      description: "Choose one creature you can see within range. Yellow strips of magical energy loop around the creature. The target must succeed on a Strength saving throw, or its flying speed (if any) is reduced to 0 feet for the spell's duration. An airborne creature affected by this spell safely descends at 60 feet per round until it reaches the ground or the spell ends."
+    },
+    "Enhance Ability": { 
+      level: "2nd", 
+      school: "Transmutation", 
+      castingTime: "Action", 
+      range: "Touch", 
+      components: "V, S, M (fur or a feather)", 
+      duration: "Concentration, up to 1 hour", 
+      description: "You touch a creature and choose Strength, Dexterity, Intelligence, Wisdom, or Charisma. For the duration, the target has Advantage on ability checks using the chosen ability.\n\nUsing a Higher-Level Spell Slot. You can target one additional creature for each spell slot level above 2. You can choose a different ability for each target."
+    },
+    "Pass without Trace": { 
+      level: "2nd", 
+      school: "Abjuration", 
+      castingTime: "Action", 
+      range: "Self", 
+      components: "V, S, M (ashes from burned mistletoe)", 
+      duration: "Concentration, up to 1 hour", 
+      description: "You radiate a concealing aura in a 30-foot Emanation for the duration. While in the aura, you and each creature you choose have a +10 bonus to Dexterity (Stealth) checks and leave no tracks."
+    },
+    "Revivify": { 
+      level: "3rd", 
+      school: "Necromancy", 
+      castingTime: "Action", 
+      range: "Touch", 
+      components: "V, S, M (a diamond worth 300+ GP, which the spell consumes)", 
+      duration: "Instantaneous", 
+      description: "You touch a creature that has died within the last minute. That creature revives with 1 Hit Point. This spell can't revive a creature that has died of old age, nor does it restore any missing body parts."
+    },
+    "Sleet Storm": { 
+      level: "3rd", 
+      school: "Conjuration", 
+      castingTime: "Action", 
+      range: "150 feet", 
+      components: "V, S, M (a miniature umbrella)", 
+      duration: "Concentration, up to 1 minute", 
+      description: "Until the spell ends, sleet falls in a 40-foot-tall, 20-foot-radius Cylinder centered on a point you choose within range. The area is Heavily Obscured, and exposed flames in the area are doused.\n\nGround in the Cylinder is Difficult Terrain. When a creature enters the Cylinder for the first time on a turn or starts its turn there, it must succeed on a Dexterity saving throw or have the Prone condition and lose Concentration."
+    },
+    "Tidal Wave": { 
+      level: "3rd", 
+      school: "Conjuration", 
+      castingTime: "Action", 
+      range: "120 feet", 
+      components: "V, S, M (a drop of water)", 
+      duration: "Instantaneous", 
+      description: "You conjure up a wave of water that crashes down on an area within range. The area can be up to 30 feet long, up to 10 feet wide, and up to 10 feet tall. Each creature in that area must make a Dexterity saving throw. On a failed save, a creature takes 4d8 bludgeoning damage and is knocked prone. On a successful save, a creature takes half as much damage and isn't knocked prone. The water then spreads out across the ground in all directions, extinguishing unprotected flames in its area and within 30 feet of it, and then it vanishes."
+    },
+    "Fire Shield": { 
+      level: "4th", 
+      school: "Evocation", 
+      castingTime: "Action", 
+      range: "Self", 
+      components: "V, S, M (a bit of phosphorus or a firefly)", 
+      duration: "10 minutes", 
+      description: "Wispy flames wreathe your body for the duration, shedding Bright Light in a 10-foot radius and Dim Light for an additional 10 feet.\n\nThe flames provide you with a warm shield or a chill shield, as you choose. The warm shield grants you Resistance to Cold damage, and the chill shield grants you Resistance to Fire damage.\n\nIn addition, whenever a creature within 5 feet of you hits you with a melee attack roll, the shield erupts with flame. The attacker takes 2d8 Fire damage from a warm shield or 2d8 Cold damage from a chill shield."
+    },
+    "Dispel Magic": { 
+      level: "3rd", 
+      school: "Abjuration", 
+      castingTime: "Action", 
+      range: "120 feet", 
+      components: "V, S", 
+      duration: "Instantaneous", 
+      description: "Choose one creature, object, or magical effect within range. Any ongoing spell of level 3 or lower on the target ends. For each ongoing spell of level 4 or higher on the target, make an ability check using your spellcasting ability (DC 10 plus that spell's level). On a successful check, the spell ends.\n\nUsing a Higher-Level Spell Slot. You automatically end a spell on the target if the spell's level is equal to or less than the level of the spell slot you use."
+    },
+    "Absorb Elements": { 
+      level: "1st", 
+      school: "Abjuration", 
+      castingTime: "Reaction, which you take when you take acid, cold, fire, lightning, or thunder damage", 
+      range: "Self", 
+      components: "S", 
+      duration: "1 round", 
+      description: "The spell captures some of the incoming energy, lessening its effect on you and storing it for your next melee attack. You have resistance to the triggering damage type until the start of your next turn. Also, the first time you hit with a melee attack on your next turn, the target takes an extra 1d6 damage of the triggering type, and the spell ends.\n\nAt Higher Levels. When you cast this spell using a spell slot of 2nd level or higher, the extra damage increases by 1d6 for each slot level above 1st."
+    },
+    "Goodberry": {
+      level: "1st", 
+      school: "Conjuration", 
+      castingTime: "Actione", 
+      range: "Touch", 
+      components: "V, S, M (a sprig of mistletoe)", 
+      duration: "24 hours", 
+      description: "Ten berries appear in your hand and are infused with magic for the duration. A creature can take a Bonus Action to eat one berry. Eating a berry restores 1 Hit Point, and the berry provides enough nourishment to sustain a creature for one day.\n\nUneaten berries disappear when the spell ends."
     }
   };
 
@@ -572,13 +803,42 @@ const ElementalistSheet = () => {
 
   // Prepared spells (hardcoded as requested)
   const preparedSpells = [
-    'Guidance', 'Druidcraft', 'Thorn Whip', 'Primal Savagery', // Cantrips
-    'Cure Wounds', 'Healing Word', 'Faerie Fire', 'Entangle', // 1st level
-    'Moonbeam', 'Heat Metal', 'Pass without Trace', 'Wild Shape', // 2nd level
-    'Conjure Animals', 'Call Lightning', 'Dispel Magic', // 3rd level
-    'Polymorph', 'Freedom of Movement', 'Giant Insect', // 4th level
-    'Greater Restoration', 'Tree Stride', 'Scrying' // 5th level
+    'Resistance', 'Message', 'Create Bonfire', 'Druidcraft',
+    'Goodberry', 'Cure Wounds', 'Faerie Fire', 'Healing Word',
+    'Continual Flame', 'Earthbind', 'Enhance Ability', 'Pass without Trace',
+    'Revivify', 'Sleet Storm', 'Tidal Wave',
+    'Fire Shield'
   ];
+
+  // Get all prepared spells including communion spells
+  const getAllPreparedSpells = () => {
+    let allSpells = [...preparedSpells];
+    const pendantSpells = getPendantSpellNames();
+    allSpells = [...allSpells, ...pendantSpells];
+
+    // Add communion spells if active
+    if (activeElement) {
+      const elementSpells = elements[activeElement]?.spells || {};
+      const aetherSpells = elements.aether.spells;
+      
+      // Add element spells up to current level
+      Object.keys(elementSpells).forEach(spellLevel => {
+        if (level >= parseInt(spellLevel)) {
+          allSpells = [...allSpells, ...elementSpells[spellLevel]];
+        }
+      });
+      
+      // Add Aether spells up to current level
+      Object.keys(aetherSpells).forEach(spellLevel => {
+        if (level >= parseInt(spellLevel)) {
+          allSpells = [...allSpells, ...aetherSpells[spellLevel]];
+        }
+      });
+    }
+    
+    // Remove duplicates and return
+    return [...new Set(allSpells)];
+  };
 
   const longRest = () => {
     // Reset spell slots
@@ -693,42 +953,15 @@ const ElementalistSheet = () => {
     alert('Has gastado 1 uso de Wild Shape para recuperar 1 espacio de nivel 1');
   };
   const getSpellLevel = (spellName) => {
-    // Check in spell database first
+    // Check in spell database first - this is the authoritative source
     if (spellDatabase[spellName]) {
       const level = spellDatabase[spellName].level;
       if (level === "Cantrip") return 0;
       return parseInt(level.replace(/\D/g, '')) || 1;
     }
     
-    // Check in elemental spells
-    for (const element of Object.values(elements)) {
-      for (const [levelKey, spells] of Object.entries(element.spells)) {
-        if (spells.includes(spellName)) {
-          const spellLevel = parseInt(levelKey);
-          // Convert druid level requirement to spell level
-          if (spellLevel === 3) return 1; // Level 3 druids get 1st level spells
-          if (spellLevel === 5) return 3; // Level 5 druids get 3rd level spells
-          if (spellLevel === 7) return 4; // Level 7 druids get 4th level spells
-          if (spellLevel === 9) return 5; // Level 9 druids get 5th level spells
-          return 1; // Default fallback
-        }
-      }
-    }
-    
-    // Fallback for prepared spells
-    const cantrips = ['Guidance', 'Druidcraft', 'Thorn Whip', 'Primal Savagery'];
-    if (cantrips.includes(spellName)) return 0;
-    
-    // Estimate based on position in prepared spells array
-    const spellIndex = preparedSpells.indexOf(spellName);
-    if (spellIndex >= 0 && spellIndex < 4) return 0; // Cantrips
-    if (spellIndex >= 4 && spellIndex < 8) return 1; // 1st level
-    if (spellIndex >= 8 && spellIndex < 11) return 2; // 2nd level
-    if (spellIndex >= 11 && spellIndex < 14) return 3; // 3rd level
-    if (spellIndex >= 14 && spellIndex < 17) return 4; // 4th level
-    if (spellIndex >= 17) return 5; // 5th level
-    
-    return 1; // Default fallback
+    // If not found, return 1 as fallback (most spells are 1st level)
+    return 1;
   };
 
   const castSpell = (spellName, slotLevel) => {
@@ -737,6 +970,48 @@ const ElementalistSheet = () => {
     if (minimumLevel > 0 && slotLevel < minimumLevel) {
       alert(`${spellName} es un hechizo de nivel ${minimumLevel}. No puede lanzarse con un espacio de nivel ${slotLevel}.`);
       return;
+    }
+
+    if (isPendantSpell(spellName)) {
+      const { min, max } = getPendantChargeRange(spellName);
+
+      if (min === 0 && max === 0) {
+        // sin datos → caerá a slots normales
+      } else {
+        let chosen = min;
+        if (min !== max) {
+          const resp = window.prompt(
+            `${spellName} (${min}-${max} cargas).\n` +
+            `Tienes ${pendantCharges} cargas.\n` +
+            `¿Cuántas cargas quieres gastar?`,
+            String(min)
+          );
+          if (resp === null) return; // cancelado
+          chosen = parseInt(resp, 10);
+          if (!Number.isFinite(chosen)) {
+            alert('Entrada no válida.');
+            return;
+          }
+        }
+
+        if (chosen < min || chosen > max) {
+          alert(`Debes gastar entre ${min} y ${max} cargas para ${spellName}.`);
+          return;
+        }
+        if (pendantCharges < chosen) {
+          alert(`No tienes suficientes cargas: necesitas ${chosen}, tienes ${pendantCharges}.`);
+          return;
+        }
+
+        setPendantCharges(prev => prev - chosen);
+
+        const effectiveSlot = getPendantEffectiveSlot(chosen);
+        alert(
+          `Has lanzado ${spellName} usando ${chosen} carga(s) del pendiente.`
+        );
+
+        return; // salimos: NO gastamos slot
+      }
     }
     
     if (spellSlots[slotLevel].current <= 0) {
@@ -763,7 +1038,7 @@ const ElementalistSheet = () => {
     fire: {
       name: 'Orbe de Fuego - Gunblade',
       forms: {
-        sword: { damage: '1d8 cortante', properties: 'Finesse', mastery: 'Vex' },
+        sword: { damage: '1d8 fuego', properties: 'Finesse', mastery: 'Vex' },
         gun: { damage: '1d8 fuego', properties: 'Finesse, Loading, Close Quarters', mastery: 'Push (≤5ft) / Slow (>5ft)', range: '30/90' }
       },
       gemInfused: 'Crítico en 19-20'
@@ -820,15 +1095,15 @@ const ElementalistSheet = () => {
 
   const getPendantData = () => {
     switch(pendantState) {
-      case 'dormant':
+            case 'dormant':
         return {
           maxCharges: 8,
           recoveryDice: '1d4+2',
           spellBonus: 1,
           spells: {
-            'Chromatic Orb': '1-3 cargas',
-            'Detect Magic': '1 carga',
-            'Dispel Magic': '3 cargas'
+            'Chromatic Orb': { min: 1, max: 3 },
+            'Detect Magic': { min: 1, max: 1 },
+            'Dispel Magic': { min: 3, max: 3 }
           }
         };
       case 'awakened':
@@ -837,11 +1112,11 @@ const ElementalistSheet = () => {
           recoveryDice: '1d6+2',
           spellBonus: 2,
           spells: {
-            'Chromatic Orb': '1-5 cargas',
-            'Detect Magic': '1 carga',
-            'Dispel Magic': '3 cargas',
-            'Counterspell': '3 cargas',
-            'Circle of Power': '5 cargas'
+            'Chromatic Orb': { min: 1, max: 5 },
+            'Detect Magic': { min: 1, max: 1 },
+            'Dispel Magic': { min: 3, max: 5 },
+            'Counterspell': { min: 3, max: 3 },
+            'Circle of Power': { min: 5, max: 5 }
           }
         };
       case 'exalted':
@@ -850,13 +1125,13 @@ const ElementalistSheet = () => {
           recoveryDice: '1d6+4',
           spellBonus: 3,
           spells: {
-            'Chromatic Orb': '1-8 cargas',
-            'Detect Magic': '1 carga',
-            'Dispel Magic': '3 cargas',
-            'Counterspell': '3 cargas',
-            'Circle of Power': '5 cargas',
-            'Temporal Shunt': '5 cargas',
-            'Antimagic Field': '8 cargas'
+            'Chromatic Orb': { min: 1, max: 8 },
+            'Detect Magic': { min: 1, max: 1 },
+            'Dispel Magic': { min: 3, max: 8 },
+            'Counterspell': { min: 3, max: 3 },
+            'Circle of Power': { min: 5, max: 5 },
+            'Temporal Shunt': { min: 5, max: 5 },
+            'Antimagic Field': { min: 8, max: 8 }
           }
         };
       default:
@@ -865,16 +1140,34 @@ const ElementalistSheet = () => {
           recoveryDice: '1d6+4',
           spellBonus: 3,
           spells: {
-            'Chromatic Orb': '1-8 cargas',
-            'Detect Magic': '1 carga',
-            'Dispel Magic': '3 cargas',
-            'Counterspell': '3 cargas',
-            'Circle of Power': '5 cargas',
-            'Temporal Shunt': '5 cargas',
-            'Antimagic Field': '8 cargas'
+            'Chromatic Orb': { min: 1, max: 8 },
+            'Detect Magic': { min: 1, max: 1 },
+            'Dispel Magic': { min: 3, max: 3 },
+            'Counterspell': { min: 3, max: 3 },
+            'Circle of Power': { min: 5, max: 5 },
+            'Temporal Shunt': { min: 5, max: 5 },
+            'Antimagic Field': { min: 8, max: 8 }
           }
         };
     }
+  };
+  const getPendantSpellNames = () => Object.keys(getPendantData().spells || {});
+
+  const isPendantSpell = (spellName) => !!getPendantData().spells?.[spellName];
+
+  const getPendantChargeRange = (spellName) => {
+    const entry = getPendantData().spells?.[spellName];
+    if (!entry) return { min: 0, max: 0 };
+    const min = Number.isFinite(entry.min) ? entry.min : 0;
+    const max = Number.isFinite(entry.max) ? entry.max : min;
+    return { min, max };
+  };
+
+  const formatPendantCost = (spellName) => {
+    const { min, max } = getPendantChargeRange(spellName);
+    if (min === 0 && max === 0) return '';
+    if (min === max) return `${min} carga${min === 1 ? '' : 's'}`;
+    return `${min}-${max} cargas`;
   };
 
   const getCalculatedSpellSaveDC = () => {
@@ -921,10 +1214,28 @@ const ElementalistSheet = () => {
     setCommunionDuration(null);
   };
 
-  const rollAttack = () => {
+  const rollAttack = (advantage = 'normal') => {
     const rollDie = (sides) => Math.floor(Math.random() * sides) + 1;
     const weaponBonus = getWeaponBonus();
     const attackBonus = proficiencyBonus + weaponBonus + dexMod;
+
+    // Roll d20 with advantage/disadvantage
+    const rollD20 = () => {
+      if (advantage === 'advantage') {
+        const roll1 = rollDie(20);
+        const roll2 = rollDie(20);
+        const higher = Math.max(roll1, roll2);
+        return { result: higher, text: `d20(${roll1}, ${roll2}) toma ${higher}` };
+      } else if (advantage === 'disadvantage') {
+        const roll1 = rollDie(20);
+        const roll2 = rollDie(20);
+        const lower = Math.min(roll1, roll2);
+        return { result: lower, text: `d20(${roll1}, ${roll2}) toma ${lower}` };
+      } else {
+        const roll = rollDie(20);
+        return { result: roll, text: `d20(${roll})` };
+      }
+    };
 
     // Calculate Maelstrom Weapon damage first (applies to all attacks)
     let maelstromDamage = 0;
@@ -936,25 +1247,48 @@ const ElementalistSheet = () => {
       else if (level >= 11) baseDice = 3;
       else if (level >= 5) baseDice = 2;
       
+      // Sorcerous Burst with exploding 8s mechanics
       let totalDamage = 0;
-      let diceRolled = [];
+      let allRolls = [];
       
       for (let i = 0; i < baseDice; i++) {
-        const roll = rollDie(8);
-        diceRolled.push(roll);
-        totalDamage += roll;
+        let diceRolls = [];
+        let currentRoll = rollDie(8);
+        diceRolls.push(currentRoll);
+        totalDamage += currentRoll;
+        
+        // If rolled an 8, keep rolling up to wisdom modifier times
+        let explosions = 0;
+        while (currentRoll === 8 && explosions < wisdomMod) {
+          currentRoll = rollDie(8);
+          diceRolls.push(currentRoll);
+          totalDamage += currentRoll;
+          explosions++;
+        }
+        
+        allRolls.push(diceRolls);
       }
       
       maelstromDamage = totalDamage;
-      maelstromText = `Maelstrom Weapon: Sorcerous Burst ${baseDice}d8(${diceRolled.join('+')}) = ${maelstromDamage}`;
+      
+      // Format the roll text to show explosions
+      const rollText = allRolls.map((rolls, i) => {
+        if (rolls.length > 1) {
+          return `d8(${rolls.join('→')})`;
+        } else {
+          return `d8(${rolls[0]})`;
+        }
+      }).join(' + ');
+      
+      maelstromText = `Maelstrom Weapon: Sorcerous Burst ${rollText} = ${maelstromDamage}`;
     }
 
     if (activeOrb === 'air' && bladeSeparated) {
       // DUAL ATTACK SYSTEM
-      const d20_1 = rollDie(20);
-      const d20_2 = rollDie(20);
-      const attack1Total = d20_1 + attackBonus;
-      const attack2Total = d20_2 + attackBonus;
+      const d20Roll1 = rollD20();
+      const d20Roll2 = rollD20();
+      const attack1Total = d20Roll1.result + attackBonus;
+      const attack2Total = d20Roll2.result + attackBonus;
 
       const damage1_base = rollDie(6);
       const damage2_base = rollDie(6);
@@ -962,8 +1296,8 @@ const ElementalistSheet = () => {
       let damage1 = damage1_base + dexMod + weaponBonus;
       let damage2 = damage2_base + weaponBonus;
 
-      const attack1Crit = d20_1 === 20;
-      const attack2Crit = d20_2 === 20;
+      const attack1Crit = d20Roll1.result === 20;
+      const attack2Crit = d20Roll2.result === 20;
 
       let critRoll1 = null;
       let critRoll2 = null;
@@ -984,15 +1318,39 @@ const ElementalistSheet = () => {
         else if (level >= 11) baseDice = 3;
         else if (level >= 5) baseDice = 2;
 
+        // Critical Sorcerous Burst with exploding 8s
         let criticalDamage = 0;
-        let criticalDiceRolled = [];
+        let critAllRolls = [];
+        
         for (let i = 0; i < baseDice; i++) {
-          const roll = rollDie(8);
-          criticalDiceRolled.push(roll);
-          criticalDamage += roll;
+          let diceRolls = [];
+          let currentRoll = rollDie(8);
+          diceRolls.push(currentRoll);
+          criticalDamage += currentRoll;
+          
+          // If rolled an 8, keep rolling up to wisdom modifier times
+          let explosions = 0;
+          while (currentRoll === 8 && explosions < wisdomMod) {
+            currentRoll = rollDie(8);
+            diceRolls.push(currentRoll);
+            criticalDamage += currentRoll;
+            explosions++;
+          }
+          
+          critAllRolls.push(diceRolls);
         }
+        
         totalMaelstromDamage += criticalDamage;
-        maelstromText += ` + Crítico: ${baseDice}d8(${criticalDiceRolled.join('+')}) = +${criticalDamage}`;
+        
+        const critRollText = critAllRolls.map((rolls) => {
+          if (rolls.length > 1) {
+            return `d8(${rolls.join('→')})`;
+          } else {
+            return `d8(${rolls[0]})`;
+          }
+        }).join(' + ');
+        
+        maelstromText += ` + Crítico: ${critRollText} = +${criticalDamage}`;
       }
 
       if (maelstromText) {
@@ -1000,13 +1358,13 @@ const ElementalistSheet = () => {
       }
 
       const dmgLine1 =
-        `Ataque 1: d20(${d20_1}) + ${attackBonus} = ${attack1Total} → ` +
+        `Ataque 1: ${d20Roll1.text} + ${attackBonus} = ${attack1Total} → ` +
         `1d6(${damage1_base})` +
         (critRoll1 !== null ? ` + 1d6 crítico(${critRoll1})` : ``) +
         ` + ${dexMod + weaponBonus} = ${damage1} rayo`;
 
       const dmgLine2 =
-        `Ataque 2: d20(${d20_2}) + ${attackBonus} = ${attack2Total} → ` +
+        `Ataque 2: ${d20Roll2.text} + ${attackBonus} = ${attack2Total} → ` +
         `1d6(${damage2_base})` +
         (critRoll2 !== null ? ` + 1d6 crítico(${critRoll2})` : ``) +
         ` + ${weaponBonus} = ${damage2} rayo`;
@@ -1026,12 +1384,13 @@ const ElementalistSheet = () => {
         maelstromText: maelstromText,
         totalDamage: damage1 + damage2 + totalMaelstromDamage,
         isCritical: attack1Crit || attack2Crit,
-        criticalRange: '20'
+        criticalRange: '20',
+        advantageText: advantage === 'normal' ? '' : ` (${advantage === 'advantage' ? 'Ventaja' : 'Desventaja'})`
       });
     } else {
       // SINGLE ATTACK SYSTEM
-      const d20 = rollDie(20);
-      const total = d20 + attackBonus;
+      const d20Roll = rollD20();
+      const total = d20Roll.result + attackBonus;
       
       let damageType = '';
       let actualDamage = 0;
@@ -1041,11 +1400,11 @@ const ElementalistSheet = () => {
 
       if (activeOrb === 'fire') {
         form = weaponForm;
-        damageType = weaponForm === 'sword' ? 'cortante' : 'fuego';
+        damageType = weaponForm === 'sword' ? 'fuego' : 'fuego';
         const baseDamage = rollDie(8);
         actualDamage = baseDamage + dexMod + weaponBonus;
         damageRoll = `1d8(${baseDamage}) + ${dexMod + weaponBonus} = ${actualDamage}`;
-        isCritical = (!isUsingElementalCommunion() && d20 >= 19) || d20 === 20;
+        isCritical = (!isUsingElementalCommunion() && d20Roll.result >= 19) || d20Roll.result === 20;
         
         if (isCritical) {
           const critRoll = rollDie(8);
@@ -1058,7 +1417,7 @@ const ElementalistSheet = () => {
         actualDamage = baseDamage + dexMod + weaponBonus;
         damageRoll = `1d8(${baseDamage}) + ${dexMod + weaponBonus} = ${actualDamage}`;
         form = 'combinadas';
-        isCritical = d20 === 20;
+        isCritical = d20Roll.result === 20;
         
         if (isCritical) {
           const critRoll = rollDie(8);
@@ -1079,7 +1438,7 @@ const ElementalistSheet = () => {
           damageRoll = `1d8(${baseDamage}) + ${dexMod + weaponBonus} = ${actualDamage}`;
           form = 'a una mano';
         }
-        isCritical = d20 === 20;
+        isCritical = d20Roll.result === 20;
         
         if (isCritical) {
           if (hammerGrip === 'two-handed') {
@@ -1099,7 +1458,7 @@ const ElementalistSheet = () => {
         actualDamage = baseDamage + dexMod + weaponBonus;
         damageRoll = `1d8(${baseDamage}) + ${dexMod + weaponBonus} = ${actualDamage}`;
         form = 'tridente';
-        isCritical = d20 === 20;
+        isCritical = d20Roll.result === 20;
         
         if (isCritical) {
           const critRoll = rollDie(8);
@@ -1116,17 +1475,39 @@ const ElementalistSheet = () => {
         else if (level >= 11) baseDice = 3;
         else if (level >= 5) baseDice = 2;
         
+        // Critical Sorcerous Burst with exploding 8s
         let criticalDamage = 0;
-        let criticalDiceRolled = [];
+        let critAllRolls = [];
         
         for (let i = 0; i < baseDice; i++) {
-          const roll = rollDie(8);
-          criticalDiceRolled.push(roll);
-          criticalDamage += roll;
+          let diceRolls = [];
+          let currentRoll = rollDie(8);
+          diceRolls.push(currentRoll);
+          criticalDamage += currentRoll;
+          
+          // If rolled an 8, keep rolling up to wisdom modifier times
+          let explosions = 0;
+          while (currentRoll === 8 && explosions < wisdomMod) {
+            currentRoll = rollDie(8);
+            diceRolls.push(currentRoll);
+            criticalDamage += currentRoll;
+            explosions++;
+          }
+          
+          critAllRolls.push(diceRolls);
         }
         
         totalMaelstromDamage += criticalDamage;
-        maelstromText += ` + Crítico: ${baseDice}d8(${criticalDiceRolled.join('+')}) = +${criticalDamage}`;
+        
+        const critRollText = critAllRolls.map((rolls) => {
+          if (rolls.length > 1) {
+            return `d8(${rolls.join('→')})`;
+          } else {
+            return `d8(${rolls[0]})`;
+          }
+        }).join(' + ');
+        
+        maelstromText += ` + Crítico: ${critRollText} = +${criticalDamage}`;
       }
 
       if (maelstromText) {
@@ -1138,7 +1519,8 @@ const ElementalistSheet = () => {
           `Comunión: ${elements[activeElement].name}` : 
           morphbladeOrbs[activeOrb].name,
         form: form,
-        d20Roll: d20,
+        d20Roll: d20Roll.result,
+        d20Text: d20Roll.text,
         attackBonus: attackBonus,
         attackTotal: total,
         damageType: damageType,
@@ -1146,7 +1528,8 @@ const ElementalistSheet = () => {
         maelstromText: maelstromText,
         totalDamage: actualDamage + totalMaelstromDamage,
         isCritical: isCritical,
-        criticalRange: (!isUsingElementalCommunion() && activeOrb === 'fire') ? '19-20' : '20'
+        criticalRange: (!isUsingElementalCommunion() && activeOrb === 'fire') ? '19-20' : '20',
+        advantageText: advantage === 'normal' ? '' : ` (${advantage === 'advantage' ? 'Ventaja' : 'Desventaja'})`
       });
     }
   };
@@ -1615,22 +1998,46 @@ const ElementalistSheet = () => {
           </div>
           
           {/* Attack Roll Button */}
-          <button 
-            onClick={rollAttack}
-            className="w-full px-4 py-3 bg-purple-600 hover:bg-purple-700 rounded font-bold text-lg flex items-center justify-center gap-2 mb-4"
-          >
-            <Dice6 className="w-5 h-5" />
-            Rodar Ataque
-            {level >= 6 && <span className="text-sm">(+ Maelstorm Weapon)</span>}
-          </button>
+          <div className="w-full mb-4">
+            <div className="flex rounded font-bold text-lg overflow-hidden">
+              {/* Disadvantage */}
+              <button 
+                onClick={() => rollAttack('disadvantage')}
+                className="flex-1 px-4 py-3 bg-red-600 hover:bg-red-700 flex items-center justify-center gap-1 border-r border-red-500"
+              >
+                <span className="text-sm">📉</span>
+                <span className="hidden sm:inline">Desv.</span>
+              </button>
+              
+              {/* Normal */}
+              <button 
+                onClick={() => rollAttack('normal')}
+                className="flex-2 px-4 py-3 bg-purple-600 hover:bg-purple-700 flex items-center justify-center gap-2 border-r border-purple-500"
+              >
+                <Dice6 className="w-5 h-5" />
+                <span>Atacar</span>
+              </button>
+              
+              {/* Advantage */}
+              <button 
+                onClick={() => rollAttack('advantage')}
+                className="flex-1 px-4 py-3 bg-green-600 hover:bg-green-700 flex items-center justify-center gap-1 border-l border-green-500"
+              >
+                <span className="text-sm">📈</span>
+                <span className="hidden sm:inline">Vent.</span>
+              </button>
+            </div>
+          </div>
           
           {/* Attack Results */}
           {attackResult && (
             <div className="p-4 bg-gray-700 rounded border-l-4 border-purple-500">
               <h3 className="font-bold text-purple-300 mb-2">🎲 Resultado del Ataque</h3>
               <div className="space-y-1 text-sm">
-                <p><strong>Arma:</strong> {attackResult.weaponName} ({attackResult.form})</p>
-                <p><strong>Ataque:</strong> {typeof attackResult.d20Roll === 'string' ? attackResult.d20Roll : `d20(${attackResult.d20Roll}) + ${attackResult.attackBonus} = ${attackResult.attackTotal}`}</p>
+                <p><strong>Arma:</strong> {attackResult.weaponName} ({attackResult.form}){attackResult.advantageText}</p>
+                <p><strong>Ataque:</strong> {typeof attackResult.d20Roll === 'string' ? attackResult.d20Roll : 
+                  attackResult.d20Text ? `${attackResult.d20Text} + ${attackResult.attackBonus} = ${attackResult.attackTotal}` :
+                  `d20(${attackResult.d20Roll}) + ${attackResult.attackBonus} = ${attackResult.attackTotal}`}</p>
                 <div><strong>Daño {attackResult.damageType}:</strong> 
                   <div className="whitespace-pre-line ml-2">{attackResult.damageRoll}</div>
                 </div>
@@ -1695,8 +2102,8 @@ const ElementalistSheet = () => {
           <div className="mt-2">
             <p><strong>Hechizos disponibles:</strong></p>
             <div className="ml-4 mt-1">
-              {Object.entries(getPendantData().spells).map(([spell, cost]) => (
-                <p key={spell} className="text-xs">• {spell} ({cost})</p>
+              {Object.entries(getPendantData().spells).map(([spell, _cost]) => (
+                <p key={spell} className="text-xs">• {spell} ({formatPendantCost(spell)})</p>
               ))}
             </div>
           </div>
@@ -1708,70 +2115,61 @@ const ElementalistSheet = () => {
         <h2 className="text-xl font-bold mb-4 text-yellow-400">Mis Hechizos Preparados</h2>
         
         <div className="space-y-3">
-          <div>
-            <h3 className="font-semibold text-blue-300 mb-2">Cantrips (Ilimitados)</h3>
-            <div className="flex flex-wrap gap-2">
-              {preparedSpells.slice(0, 4).map(spell => (
-                <div key={spell} className="flex gap-1">
-                  <button
-                    onClick={() => {
-                      setSelectedSpell(spell);
-                      setShowSpellModal(true);
-                    }}
-                    className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-sm"
-                  >
-                    {spell}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setSpellToCast(spell);
-                      setShowCastModal(true);
-                    }}
-                    className="px-2 py-1 bg-green-600 hover:bg-green-700 rounded text-sm"
-                    title="Lanzar hechizo"
-                  >
-                    ⚡
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-          
-          {[1, 2, 3, 4, 5].map(spellLevel => {
-            const spellsForLevel = preparedSpells.slice(4 + (spellLevel - 1) * 3, 4 + spellLevel * 3);
-            if (spellsForLevel.length === 0) return null;
+          {(() => {
+            const allPreparedSpells = getAllPreparedSpells();
+            const spellsByLevel = {};
             
-            return (
-              <div key={spellLevel}>
-                <h3 className="font-semibold text-blue-300 mb-2">Nivel {spellLevel}</h3>
-                <div className="flex flex-wrap gap-2">
-                  {spellsForLevel.map(spell => (
-                    <div key={spell} className="flex gap-1">
-                      <button
-                        onClick={() => {
-                          setSelectedSpell(spell);
-                          setShowSpellModal(true);
-                        }}
-                        className="px-3 py-1 bg-purple-600 hover:bg-purple-700 rounded text-sm"
-                      >
-                        {spell}
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSpellToCast(spell);
-                          setShowCastModal(true);
-                        }}
-                        className="px-2 py-1 bg-green-600 hover:bg-green-700 rounded text-sm"
-                        title="Lanzar hechizo"
-                      >
-                        ⚡
-                      </button>
-                    </div>
-                  ))}
+            // Group spells by level
+            allPreparedSpells.forEach(spell => {
+              const spellLevel = getSpellLevel(spell);
+              if (!spellsByLevel[spellLevel]) {
+                spellsByLevel[spellLevel] = [];
+              }
+              spellsByLevel[spellLevel].push(spell);
+            });
+            
+            // Sort levels and render
+            return Object.keys(spellsByLevel).sort((a, b) => parseInt(a) - parseInt(b)).map(spellLevel => {
+              const levelNum = parseInt(spellLevel);
+              const levelName = levelNum === 0 ? 'Cantrips (Ilimitados)' : `Nivel ${levelNum}`;
+              const spells = spellsByLevel[spellLevel];
+              
+              return (
+                <div key={spellLevel}>
+                  <h3 className="font-semibold text-blue-300 mb-2">{levelName}</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {spells.map(spell => {
+                      const isFromCommunion = !preparedSpells.includes(spell);
+                      const fromPendant = isPendantSpell(spell);
+                      return (
+                        <div key={spell} className="flex gap-1">
+                          <button
+                            onClick={() => {
+                              requestCast(spell);
+                            }}
+                            title={fromPendant ? `Del pendiente • ${formatPendantCost(spell)}` : (isFromCommunion ? 'Comunión elemental' : '')}
+                            className={`px-3 py-1 rounded text-sm ${
+                              levelNum === 0 
+                                ? 'bg-blue-600 hover:bg-blue-700' 
+                                : fromPendant
+                                  ? 'bg-yellow-600 hover:bg-yellow-700'
+                                  : isFromCommunion
+                                    ? 'bg-green-600 hover:bg-green-700'
+                                    : 'bg-purple-600 hover:bg-purple-700'
+                            }`}
+                            >
+                              {spell}
+                              {fromPendant && <span className="ml-1">{'📿'}</span>}
+                              {!fromPendant && isFromCommunion && ' ✨'}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            });
+          })()}
         </div>
       </div>
       
@@ -1801,7 +2199,7 @@ const ElementalistSheet = () => {
                 </button>
                 <button
                   onClick={() => setShowSpellModal(false)}
-                  className="text-gray-400 hover:text-white text-3xl font-bold w-12 h-12 flex items-center justify-center rounded hover:bg-gray-700"
+                  className="text-gray-400 hover:text-white text-2xl font-bold w-10 h-10 flex items-center justify-center rounded hover:bg-gray-700"
                 >
                   ×
                 </button>
