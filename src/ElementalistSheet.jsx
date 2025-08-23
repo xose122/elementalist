@@ -2,40 +2,67 @@ import React, { useState, useEffect } from 'react';
 import { Sword, Zap, Droplets, Mountain, Wind, Clock, Move3D, Sparkles, Dice6 } from 'lucide-react';
 
 const ElementalistSheet = () => {
+
+  // Hook auxiliar para sincronizar un estado con localStorage
+  const LS_PREFIX = "elementalist.";
+
+  const usePersistedState = (key, defaultValue) => {
+    const fullKey = LS_PREFIX + key;
+
+    const [state, setState] = React.useState(() => {
+      try {
+        const saved = localStorage.getItem(fullKey);
+        return saved !== null ? JSON.parse(saved) : defaultValue;
+      } catch {
+        return defaultValue;
+      }
+    });
+
+    React.useEffect(() => {
+      try {
+        localStorage.setItem(fullKey, JSON.stringify(state));
+      } catch {
+        /* no-op */
+      }
+    }, [fullKey, state]);
+
+    return [state, setState];
+  };
+
   // Character stats
-  const [level, setLevel] = useState(8);
-  const [proficiencyBonus, setProficiencyBonus] = useState(3);
-  const [wisdomMod, setWisdomMod] = useState(4);
-  const [dexMod, setDexMod] = useState(4);
-  const [spellAttackBonus, setSpellAttackBonus] = useState(12);
-  const [spellSaveDC, setSpellSaveDC] = useState(20);
+  const [level, setLevel] = usePersistedState("level", 8);
+  const [proficiencyBonus, setProficiencyBonus] = usePersistedState("proficiencyBonus", 3);
+  const [wisdomMod, setWisdomMod] = usePersistedState("wisdomMod", 4);
+  const [dexMod, setDexMod] = usePersistedState("dexMod", 4);
+  const [spellAttackBonus, setSpellAttackBonus] = usePersistedState("spellAttackBonus", 12);
+  const [spellSaveDC, setSpellSaveDC] = usePersistedState("spellSaveDC", 20);
   
   // Attack results
   const [attackResult, setAttackResult] = useState(null);
   
   // Elemental Communion state
-  const [activeElement, setActiveElement] = useState(null);
-  const [communionDuration, setCommunionDuration] = useState(null);
-  const [usedElements, setUsedElements] = useState([]);
+  const [activeElement, setActiveElement] = usePersistedState("activeElement", null);
+  const [communionDuration, setCommunionDuration] = usePersistedState("communionDuration", null);
+  const [usedElements, setUsedElements] = usePersistedState("usedElements", []);
   
   // Morphblade state
-  const [installedOrbs, setInstalledOrbs] = useState(['air', 'earth']);
-  const [activeOrb, setActiveOrb] = useState('air');
-  const [weaponForm, setWeaponForm] = useState('sword');
-  const [bladeSeparated, setBladeSeparated] = useState(false);
-  const [hammerGrip, setHammerGrip] = useState('one-handed');
+  const [installedOrbs, setInstalledOrbs] = usePersistedState("installedOrbs", ["air","earth"]);
+  const [activeOrb, setActiveOrb] = usePersistedState("activeOrb", "air");
+  const [weaponForm, setWeaponForm] = usePersistedState("weaponForm", "sword");
+  const [bladeSeparated, setBladeSeparated] = usePersistedState("bladeSeparated", false);
+  const [hammerGrip, setHammerGrip] = usePersistedState("hammerGrip", "one-handed");
   
   // Pendant state
-  const [pendantCharges, setPendantCharges] = useState(8);
-  const [pendantState, setPendantState] = useState('dormant');
+  const [pendantCharges, setPendantCharges] = usePersistedState("pendantCharges", 8);
+  const [pendantState, setPendantState] = usePersistedState("pendantState", "dormant");
   
   // Wild Shape state
-  const [wildShapeUses, setWildShapeUses] = useState(2);
-  const [maxWildShapeUses] = useState(2);
-  const [wildResurgenceUsed, setWildResurgenceUsed] = useState(false);
+  const maxWildShapeUses = 2;
+  const [wildShapeUses, setWildShapeUses] = usePersistedState("wildShapeUses", 2);
+  const [wildResurgenceUsed, setWildResurgenceUsed] = usePersistedState("wildResurgenceUsed", false);
   
   // Spell slots state
-  const [spellSlots, setSpellSlots] = useState({
+  const [spellSlots, setSpellSlots] = usePersistedState("spellSlots", {
     1: { max: 0, current: 0 },
     2: { max: 0, current: 0 },
     3: { max: 0, current: 0 },
@@ -57,15 +84,17 @@ const ElementalistSheet = () => {
     if (isPendantSpell(spellName)) {
       const { min, max } = getPendantChargeRange(spellName);
 
-      // Si hay definición de costes y al menos el mínimo es > 0, intentamos vía cargas
+      // ¿Tiene definición de coste por cargas?
       if (min > 0 && max >= min) {
+        // ¿Hay cargas mínimas?
         if (pendantCharges < min) {
-          // Sin cargas suficientes: caemos al flujo normal de slots
+          // Fallback: abrir modal de slots
           setSpellToCast(spellName);
           setShowCastModal(true);
           return;
         }
 
+        // Elegir nº de cargas (si hay rango)
         let chosen = min;
         if (min !== max) {
           const resp = window.prompt(
@@ -82,6 +111,7 @@ const ElementalistSheet = () => {
           }
         }
 
+        // Validaciones
         if (chosen < min || chosen > max) {
           alert(`Debes gastar entre ${min} y ${max} cargas para ${spellName}.`);
           return;
@@ -91,13 +121,15 @@ const ElementalistSheet = () => {
           return;
         }
 
-        castSpell(spellName, chosen);
-        return; // no abrimos modal
+        // Lanzar por cargas: pasa nivel base como slotLevel (no se gasta) y chosen como 3er parámetro
+        const baseLevel = getSpellLevel(spellName) || 1; // 0 si es cantrip
+        castSpell(spellName, baseLevel, chosen);
+        return; // NO abrimos modal
       }
-      // Si no hay coste definido, caemos a slots
+      // Si no hay coste definido, fluye a slots
     }
 
-    // Flujo normal (slots)
+    // Flujo normal (slots): abre el modal
     setSpellToCast(spellName);
     setShowCastModal(true);
   };
@@ -257,6 +289,15 @@ const ElementalistSheet = () => {
       components: "S",
       duration: "Instantaneous or 1 hour",
       description: "You choose an area of water that you can see within range and that fits within a 5-foot cube. You manipulate it in one of the following ways:\n\n• You instantaneously move or otherwise change the flow of the water as you direct, up to 5 feet in any direction. This movement doesn't have enough force to cause damage.\n• You cause the water to form into simple shapes and animate at your direction. This change lasts for 1 hour.\n• You change the water's color or opacity. The water must be changed in the same way throughout. This change lasts for 1 hour.\n• You freeze the water, provided that there are no creatures in it. The water unfreezes in 1 hour.\n\nIf you cast this spell multiple times, you can have no more than two of its non-instantaneous effects active at a time, and you can dismiss such an effect as an action."
+    },
+    "Mold Earth": {
+      level: "Cantrip",
+      school: "Transmutation",
+      castingTime: "Action",
+      range: "30 feet",
+      components: "S",
+      duration: "Instantaneous or 1 hour",
+      description: "You choose a portion of dirt or stone that you can see within range and that fits within a 5-foot cube. You manipulate it in one of the following ways:\n\n• If you target an area of loose earth, you can instantaneously excavate it, move it along the ground, and deposit it up to 5 feet away. This movement doesn't involve enough force to cause damage.\n• You cause shapes, colors, or both to appear on the dirt or stone, spelling out words, creating images, or shaping patterns. The changes last for 1 hour.\n• If the dirt or stone you target is on the ground, you cause it to become difficult terrain. Alternatively, you can cause the ground to become normal terrain if it is already difficult terrain. This change lasts for 1 hour.\n\nIf you cast this spell multiple times, you can have no more than two of its non-instantaneous effects active at a time, and you can dismiss such an effect as an action."
     },
     "Sorcerous Burst": {
       level: "Cantrip",
@@ -851,6 +892,8 @@ const ElementalistSheet = () => {
       }
       return updated;
     });
+
+    endCommunion();
     
     // Reset used elements
     setUsedElements([]);
@@ -881,6 +924,8 @@ const ElementalistSheet = () => {
   const shortRest = () => {
     // Recover 1 use of Wild Shape
     setWildShapeUses(prev => Math.min(maxWildShapeUses, prev + 1));
+
+    endCommunion();
     
     alert('Descanso corto completado!\n• Wild Shape: +1 uso recuperado');
   };
@@ -962,70 +1007,35 @@ const ElementalistSheet = () => {
     return 1;
   };
 
-  const castSpell = (spellName, slotLevel) => {
+  const castSpell = (spellName, slotLevel, pendantChargesToUse = null) => {
     const minimumLevel = getSpellLevel(spellName);
-    
+
+    // RUTA PENDIENTE (si me pasas nº de cargas)
+    if (isPendantSpell(spellName)) {
+      const { min, max } = getPendantChargeRange(spellName);
+      if (min === 0 && max === 0 || pendantChargesToUse == null) {
+        // caerá a slots
+      } else {
+        const chosen = pendantChargesToUse;
+        if (chosen < min || chosen > max) { alert(`Debes gastar entre ${min} y ${max} cargas para ${spellName}.`); return; }
+        if (pendantCharges < chosen)     { alert(`No tienes suficientes cargas: necesitas ${chosen}, tienes ${pendantCharges}.`); return; }
+        setPendantCharges(prev => prev - chosen);
+        alert(`Has lanzado ${spellName} usando ${chosen} carga(s) del pendiente.`);
+        return; // NO gasta slot
+      }
+    }
+
+    // RUTA SLOTS
     if (minimumLevel > 0 && slotLevel < minimumLevel) {
       alert(`${spellName} es un hechizo de nivel ${minimumLevel}. No puede lanzarse con un espacio de nivel ${slotLevel}.`);
       return;
     }
-
-    if (isPendantSpell(spellName)) {
-      const { min, max } = getPendantChargeRange(spellName);
-
-      if (min === 0 && max === 0) {
-        // sin datos → caerá a slots normales
-      } else {
-        let chosen = min;
-        if (min !== max) {
-          const resp = window.prompt(
-            `${spellName} (${min}-${max} cargas).\n` +
-            `Tienes ${pendantCharges} cargas.\n` +
-            `¿Cuántas cargas quieres gastar?`,
-            String(min)
-          );
-          if (resp === null) return; // cancelado
-          chosen = parseInt(resp, 10);
-          if (!Number.isFinite(chosen)) {
-            alert('Entrada no válida.');
-            return;
-          }
-        }
-
-        if (chosen < min || chosen > max) {
-          alert(`Debes gastar entre ${min} y ${max} cargas para ${spellName}.`);
-          return;
-        }
-        if (pendantCharges < chosen) {
-          alert(`No tienes suficientes cargas: necesitas ${chosen}, tienes ${pendantCharges}.`);
-          return;
-        }
-
-        setPendantCharges(prev => prev - chosen);
-
-        alert(
-          `Has lanzado ${spellName} usando ${chosen} carga(s) del pendiente.`
-        );
-
-        return; // salimos: NO gastamos slot
-      }
-    }
-    
     if (spellSlots[slotLevel].current <= 0) {
       alert('No tienes espacios de conjuro de ese nivel disponibles');
       return;
     }
-    
-    setSpellSlots(prev => ({
-      ...prev,
-      [slotLevel]: {
-        ...prev[slotLevel],
-        current: prev[slotLevel].current - 1
-      }
-    }));
-    
-    const levelText = minimumLevel === 0 ? 'Cantrip' : 
-                     slotLevel > minimumLevel ? `nivel ${slotLevel} (upcast desde ${minimumLevel})` : `nivel ${slotLevel}`;
+    setSpellSlots(prev => ({ ...prev, [slotLevel]: { ...prev[slotLevel], current: prev[slotLevel].current - 1 }}));
+    const levelText = minimumLevel === 0 ? 'Cantrip' : slotLevel > minimumLevel ? `nivel ${slotLevel} (upcast desde ${minimumLevel})` : `nivel ${slotLevel}`;
     alert(`Has lanzado ${spellName} (${levelText})`);
     setShowCastModal(false);
     setSpellToCast(null);
@@ -1237,6 +1247,8 @@ const ElementalistSheet = () => {
     // Calculate Maelstrom Weapon damage first (applies to all attacks)
     let maelstromDamage = 0;
     let maelstromText = '';
+    let primalDamage = 0;
+    let primalText = '';
 
     if (level >= 6) {
       let baseDice = 1;
@@ -1277,7 +1289,14 @@ const ElementalistSheet = () => {
         }
       }).join(' + ');
       
-      maelstromText = `Maelstrom Weapon: Sorcerous Burst ${rollText} = ${maelstromDamage}`;
+      maelstromText = `${rollText} = ${maelstromDamage}`;
+
+      if (level >= 7) {
+        const primalDice = (level >= 15) ? 2 : 1;
+        const rolls = Array.from({ length: primalDice }, () => rollDie(8));
+        primalDamage = rolls.reduce((a, b) => a + b, 0);
+        primalText = `${primalDice}d8(${rolls.join('+')}) = +${primalDamage}`;
+      }
     }
 
     if (activeOrb === 'air' && bladeSeparated) {
@@ -1350,6 +1369,21 @@ const ElementalistSheet = () => {
         maelstromText += ` + Crítico: ${critRollText} = +${criticalDamage}`;
       }
 
+      // Sumar PRIMAL STRIKE (y su crítico) al total en ataque dual
+      let totalPrimalDamage = primalDamage;
+
+      if ((attack1Crit || attack2Crit) && level >= 7 && primalDamage > 0) {
+        const primalDice = (level >= 15) ? 2 : 1;
+        const critRolls = Array.from({ length: primalDice }, () => rollDie(8));
+        const critSum = critRolls.reduce((a, b) => a + b, 0);
+        totalPrimalDamage += critSum;
+        primalText += ` + Crítico: ${primalDice}d8(${critRolls.join('+')}) = +${critSum}`;
+      }
+
+      if (primalText) {
+        primalText += ` daño de rayo`;
+      }
+
       if (maelstromText) {
         maelstromText += ` daño de rayo`;
       }
@@ -1379,7 +1413,8 @@ const ElementalistSheet = () => {
         damageType: 'rayo',
         damageRoll: damageRoll,
         maelstromText: maelstromText,
-        totalDamage: damage1 + damage2 + totalMaelstromDamage,
+        primalText: primalText, 
+        totalDamage: damage1 + damage2 + totalMaelstromDamage + totalPrimalDamage,
         isCritical: attack1Crit || attack2Crit,
         criticalRange: '20',
         advantageText: advantage === 'normal' ? '' : ` (${advantage === 'advantage' ? 'Ventaja' : 'Desventaja'})`
@@ -1511,6 +1546,20 @@ const ElementalistSheet = () => {
         maelstromText += ` daño de ${damageType}`;
       }
 
+      let totalPrimalDamage = primalDamage;
+
+      if (isCritical && level >= 7 && primalDamage > 0) {
+        const primalDice = (level >= 15) ? 2 : 1;
+        const critRolls = Array.from({ length: primalDice }, () => rollDie(8));
+        const critSum = critRolls.reduce((a, b) => a + b, 0);
+        totalPrimalDamage += critSum;
+        primalText += ` + Crítico: ${primalDice}d8(${critRolls.join('+')}) = +${critSum}`;
+      }
+
+      if (primalText) {
+        primalText += ` daño de ${damageType}`;
+      }
+
       setAttackResult({
         weaponName: isUsingElementalCommunion() ? 
           `Comunión: ${elements[activeElement].name}` : 
@@ -1523,37 +1572,13 @@ const ElementalistSheet = () => {
         damageType: damageType,
         damageRoll: damageRoll,
         maelstromText: maelstromText,
-        totalDamage: actualDamage + totalMaelstromDamage,
+        primalText: primalText,
+        totalDamage: actualDamage + totalMaelstromDamage + totalPrimalDamage,
         isCritical: isCritical,
         criticalRange: (!isUsingElementalCommunion() && activeOrb === 'fire') ? '19-20' : '20',
         advantageText: advantage === 'normal' ? '' : ` (${advantage === 'advantage' ? 'Ventaja' : 'Desventaja'})`
       });
     }
-  };
-
-  const getAvailableSpells = () => {
-    if (!activeElement) return [];
-    
-    const elementSpells = elements[activeElement]?.spells || {};
-    const aetherSpells = elements.aether.spells;
-    
-    let spells = [];
-    
-    // Add element spells up to current level
-    Object.keys(elementSpells).forEach(spellLevel => {
-      if (level >= parseInt(spellLevel)) {
-        spells = [...spells, ...elementSpells[spellLevel]];
-      }
-    });
-    
-    // Add Aether spells up to current level
-    Object.keys(aetherSpells).forEach(spellLevel => {
-      if (level >= parseInt(spellLevel)) {
-        spells = [...spells, ...aetherSpells[spellLevel]];
-      }
-    });
-    
-    return [...new Set(spells)]; // Remove duplicates
   };
 
   // Block/unblock body scroll when modal opens/closes
@@ -2035,11 +2060,15 @@ const ElementalistSheet = () => {
                 <p><strong>Ataque:</strong> {typeof attackResult.d20Roll === 'string' ? attackResult.d20Roll : 
                   attackResult.d20Text ? `${attackResult.d20Text} + ${attackResult.attackBonus} = ${attackResult.attackTotal}` :
                   `d20(${attackResult.d20Roll}) + ${attackResult.attackBonus} = ${attackResult.attackTotal}`}</p>
-                <div><strong>Daño {attackResult.damageType}:</strong> 
-                  <div className="whitespace-pre-line ml-2">{attackResult.damageRoll}</div>
+                <div><strong>Daño de arma:</strong> {attackResult.damageRoll} de {attackResult.damageType}
                 </div>
                 {attackResult.maelstromText && (
-                  <div className="whitespace-pre-line"><strong>{attackResult.maelstromText}</strong></div>
+                  <p><strong>Maelstrom Weapon (Sorcerous Burst): </strong> {attackResult.maelstromText}</p>
+                )}
+                {attackResult.primalText && (
+                  <p>
+                    <strong>Elemental Fury (Primal Strike): </strong>{attackResult.primalText}
+                  </p>
                 )}
                 {attackResult.isCritical && (
                   <p className="text-yellow-400"><strong>🎯 ¡CRÍTICO!</strong></p>
@@ -2142,7 +2171,8 @@ const ElementalistSheet = () => {
                         <div key={spell} className="flex gap-1">
                           <button
                             onClick={() => {
-                              requestCast(spell);
+                              setSelectedSpell(spell);
+                              setShowSpellModal(true);
                             }}
                             title={fromPendant ? `Del pendiente • ${formatPendantCost(spell)}` : (isFromCommunion ? 'Comunión elemental' : '')}
                             className={`px-3 py-1 rounded text-sm ${
@@ -2186,9 +2216,7 @@ const ElementalistSheet = () => {
               <div className="flex gap-2">
                 <button
                   onClick={() => {
-                    setSpellToCast(selectedSpell);
-                    setShowSpellModal(false);
-                    setShowCastModal(true);
+                    requestCast(selectedSpell);
                   }}
                   className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded font-bold text-sm flex items-center gap-1"
                 >
