@@ -91,9 +91,7 @@ const ElementalistSheet = () => {
           return;
         }
 
-        // Lanza por cargas: castSpell ya detecta pendiente y NO gasta slot
-        const effectiveSlot = getPendantEffectiveSlot(chosen);
-        castSpell(spellName, effectiveSlot);
+        castSpell(spellName, chosen);
         return; // no abrimos modal
       }
       // Si no hay coste definido, caemos a slots
@@ -1005,7 +1003,6 @@ const ElementalistSheet = () => {
 
         setPendantCharges(prev => prev - chosen);
 
-        const effectiveSlot = getPendantEffectiveSlot(chosen);
         alert(
           `Has lanzado ${spellName} usando ${chosen} carga(s) del pendiente.`
         );
