@@ -692,7 +692,53 @@ const ElementalistSheet = () => {
     
     alert('Has gastado 1 uso de Wild Shape para recuperar 1 espacio de nivel 1');
   };
+  const getSpellLevel = (spellName) => {
+    // Check in spell database first
+    if (spellDatabase[spellName]) {
+      const level = spellDatabase[spellName].level;
+      if (level === "Cantrip") return 0;
+      return parseInt(level.replace(/\D/g, '')) || 1;
+    }
+    
+    // Check in elemental spells
+    for (const element of Object.values(elements)) {
+      for (const [levelKey, spells] of Object.entries(element.spells)) {
+        if (spells.includes(spellName)) {
+          const spellLevel = parseInt(levelKey);
+          // Convert druid level requirement to spell level
+          if (spellLevel === 3) return 1; // Level 3 druids get 1st level spells
+          if (spellLevel === 5) return 3; // Level 5 druids get 3rd level spells
+          if (spellLevel === 7) return 4; // Level 7 druids get 4th level spells
+          if (spellLevel === 9) return 5; // Level 9 druids get 5th level spells
+          return 1; // Default fallback
+        }
+      }
+    }
+    
+    // Fallback for prepared spells
+    const cantrips = ['Guidance', 'Druidcraft', 'Thorn Whip', 'Primal Savagery'];
+    if (cantrips.includes(spellName)) return 0;
+    
+    // Estimate based on position in prepared spells array
+    const spellIndex = preparedSpells.indexOf(spellName);
+    if (spellIndex >= 0 && spellIndex < 4) return 0; // Cantrips
+    if (spellIndex >= 4 && spellIndex < 8) return 1; // 1st level
+    if (spellIndex >= 8 && spellIndex < 11) return 2; // 2nd level
+    if (spellIndex >= 11 && spellIndex < 14) return 3; // 3rd level
+    if (spellIndex >= 14 && spellIndex < 17) return 4; // 4th level
+    if (spellIndex >= 17) return 5; // 5th level
+    
+    return 1; // Default fallback
+  };
+
   const castSpell = (spellName, slotLevel) => {
+    const minimumLevel = getSpellLevel(spellName);
+    
+    if (minimumLevel > 0 && slotLevel < minimumLevel) {
+      alert(`${spellName} es un hechizo de nivel ${minimumLevel}. No puede lanzarse con un espacio de nivel ${slotLevel}.`);
+      return;
+    }
+    
     if (spellSlots[slotLevel].current <= 0) {
       alert('No tienes espacios de conjuro de ese nivel disponibles');
       return;
@@ -706,7 +752,9 @@ const ElementalistSheet = () => {
       }
     }));
     
-    alert(`Has lanzado ${spellName} usando un espacio de nivel ${slotLevel}`);
+    const levelText = minimumLevel === 0 ? 'Cantrip' : 
+                     slotLevel > minimumLevel ? `nivel ${slotLevel} (upcast desde ${minimumLevel})` : `nivel ${slotLevel}`;
+    alert(`Has lanzado ${spellName} (${levelText})`);
     setShowCastModal(false);
     setSpellToCast(null);
   };
@@ -1740,12 +1788,24 @@ const ElementalistSheet = () => {
           >
             <div className="bg-gray-800 p-4 border-b border-gray-600 flex justify-between items-center rounded-t-lg">
               <h2 className="text-xl font-bold text-purple-400">{selectedSpell}</h2>
-              <button
-                onClick={() => setShowSpellModal(false)}
-                className="text-gray-400 hover:text-white text-3xl font-bold w-12 h-12 flex items-center justify-center rounded hover:bg-gray-700"
-              >
-                ×
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setSpellToCast(selectedSpell);
+                    setShowSpellModal(false);
+                    setShowCastModal(true);
+                  }}
+                  className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded font-bold text-sm flex items-center gap-1"
+                >
+                  ⚡ Lanzar
+                </button>
+                <button
+                  onClick={() => setShowSpellModal(false)}
+                  className="text-gray-400 hover:text-white text-3xl font-bold w-12 h-12 flex items-center justify-center rounded hover:bg-gray-700"
+                >
+                  ×
+                </button>
+              </div>
             </div>
             <div className="p-4">
               {spellDatabase[selectedSpell] ? (
@@ -1801,7 +1861,7 @@ const ElementalistSheet = () => {
             </div>
             <div className="p-4">
               {/* Cantrips don't need spell slots */}
-              {['Guidance', 'Druidcraft', 'Thorn Whip', 'Primal Savagery'].includes(spellToCast) ? (
+              {getSpellLevel(spellToCast) === 0 ? (
                 <div className="text-center">
                   <p className="text-blue-300 mb-4">Los cantrips se pueden lanzar ilimitadamente</p>
                   <button
@@ -1817,23 +1877,36 @@ const ElementalistSheet = () => {
                 </div>
               ) : (
                 <div>
+                  <div className="mb-4 p-2 bg-gray-700 rounded">
+                    <p className="text-sm text-gray-300">
+                      <strong>{spellToCast}</strong> es un hechizo de <strong>nivel {getSpellLevel(spellToCast)}</strong>
+                    </p>
+                  </div>
                   <p className="text-gray-300 mb-4">Selecciona el nivel del espacio de conjuro:</p>
                   <div className="space-y-2">
                     {Object.entries(spellSlots).map(([slotLevel, slots]) => {
                       if (slots.max === 0) return null;
+                      const slotNum = parseInt(slotLevel);
+                      const minLevel = getSpellLevel(spellToCast);
+                      const canUse = slotNum >= minLevel && slots.current > 0;
+                      const isUpcast = slotNum > minLevel;
                       
                       return (
                         <button
                           key={slotLevel}
-                          onClick={() => castSpell(spellToCast, parseInt(slotLevel))}
-                          disabled={slots.current <= 0}
+                          onClick={() => castSpell(spellToCast, slotNum)}
+                          disabled={!canUse}
                           className={`w-full p-3 rounded text-left flex justify-between items-center ${
-                            slots.current > 0 
+                            canUse
                               ? 'bg-blue-600 hover:bg-blue-700 text-white' 
                               : 'bg-gray-600 text-gray-400 cursor-not-allowed'
                           }`}
                         >
-                          <span>Nivel {slotLevel}</span>
+                          <span>
+                            Nivel {slotLevel}
+                            {isUpcast && <span className="text-yellow-300"> (Upcast)</span>}
+                            {slotNum < minLevel && <span className="text-red-300"> (Muy bajo)</span>}
+                          </span>
                           <span className="text-sm">
                             {slots.current > 0 ? `${slots.current} disponibles` : 'Agotado'}
                           </span>
