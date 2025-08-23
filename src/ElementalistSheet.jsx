@@ -29,9 +29,29 @@ const ElementalistSheet = () => {
   const [pendantCharges, setPendantCharges] = useState(20);
   const [pendantState, setPendantState] = useState('exalted');
   
+  // Wild Shape state
+  const [wildShapeUses, setWildShapeUses] = useState(2);
+  const [maxWildShapeUses] = useState(2);
+  const [wildResurgenceUsed, setWildResurgenceUsed] = useState(false);
+  
+  // Spell slots state
+  const [spellSlots, setSpellSlots] = useState({
+    1: { max: 0, current: 0 },
+    2: { max: 0, current: 0 },
+    3: { max: 0, current: 0 },
+    4: { max: 0, current: 0 },
+    5: { max: 0, current: 0 },
+    6: { max: 0, current: 0 },
+    7: { max: 0, current: 0 },
+    8: { max: 0, current: 0 },
+    9: { max: 0, current: 0 }
+  });
+  
   // Modal state
   const [selectedSpell, setSelectedSpell] = useState(null);
   const [showSpellModal, setShowSpellModal] = useState(false);
+  const [showCastModal, setShowCastModal] = useState(false);
+  const [spellToCast, setSpellToCast] = useState(null);
 
   const elements = {
     fire: { 
@@ -224,7 +244,471 @@ const ElementalistSheet = () => {
       components: "V, S",
       duration: "Concentration, up to 10 minutes",
       description: "You gain the ability to move or manipulate creatures or objects by thought. When you cast the spell, and as your action each round for the duration, you can exert your will on one creature or object that you can see within range, causing the appropriate effect below. You can affect the same target round after round, or choose a new one at any time. If you switch targets, the prior target is no longer affected by the spell.\n\nCreature. You can try to move a Huge or smaller creature. Make an ability check with your spellcasting ability contested by the creature's Strength check. If you win the contest, you move the creature up to 30 feet in any direction, including upward but not beyond the range of this spell. Until the end of your next turn, the creature is restrained in your telekinetic grip.\n\nObject. You can try to move an object that weighs up to 1,000 pounds. If the object isn't being worn or carried, you automatically move it up to 30 feet in any direction, but not beyond the range of this spell. You can exert fine control on objects with your telekinetic grip, such as manipulating a simple tool, opening a door or a container, stowing or retrieving an item from an open container, or pouring the contents from a vial."
+    },
+    "Wall of Fire": {
+      level: "4th",
+      school: "Evocation",
+      castingTime: "Action",
+      range: "120 feet",
+      components: "V, S, M (a piece of charcoal)",
+      duration: "Concentration, up to 1 minute",
+      description: "You create a wall of fire on a solid surface within range. You can make the wall up to 60 feet long, 20 feet high, and 1 foot thick, or a ringed wall up to 20 feet in diameter, 20 feet high, and 1 foot thick. The wall is opaque and lasts for the duration.\n\nWhen the wall appears, each creature in its area makes a Dexterity saving throw, taking 5d8 Fire damage on a failed save or half as much damage on a successful one.\n\nOne side of the wall, selected by you when you cast this spell, deals 5d8 Fire damage to each creature that ends its turn within 10 feet of that side or inside the wall. A creature takes the same damage when it enters the wall for the first time on a turn or ends its turn there. The other side of the wall deals no damage.\n\nUsing a Higher-Level Spell Slot. The damage increases by 1d8 for each spell slot level above 4."
+    },
+    "Immolation": {
+      level: "5th",
+      school: "Evocation",
+      castingTime: "Action",
+      range: "90 feet",
+      components: "V",
+      duration: "Concentration, up to 1 minute",
+      description: "Flames wreathe one creature you can see within range. The target must make a Dexterity saving throw. It takes 8d6 fire damage on a failed save, or half as much damage on a successful one.\n\nOn a failed save, the target also burns for the spell's duration. The burning target sheds bright light in a 30-foot radius and dim light for an additional 30 feet. At the end of each of its turns, the target repeats the saving throw. It takes 4d6 fire damage on a failed save, and the spell ends on a successful one.\n\nThese magical flames can't be extinguished by nonmagical means. If damage from this spell kills a target, the target is turned to ash."
+    },
+    "Thunderous Smite": {
+      level: "1st",
+      school: "Evocation",
+      castingTime: "Bonus Action, which you take immediately after hitting a target with a Melee weapon or an Unarmed Strike",
+      range: "Self",
+      components: "V",
+      duration: "Instantaneous",
+      description: "Your strike rings with thunder that is audible within 300 feet of you, and the target takes an extra 2d6 Thunder damage from the attack. Additionally, if the target is a creature, it must succeed on a Strength saving throw or be pushed 10 feet away from you and have the Prone condition.\n\nUsing a Higher-Level Spell Slot. The damage increases by 1d6 for each spell slot level above 1."
+    },
+    "Warding Wind": {
+      level: "2nd",
+      school: "Evocation",
+      castingTime: "Action",
+      range: "Self",
+      components: "V",
+      duration: "Concentration, up to 10 minutes",
+      description: "A strong wind (20 miles per hour) blows around you in a 10-foot radius and moves with you, remaining centered on you. The wind lasts for the spell's duration.\n\n• It deafens you and other creatures in its area.\n• It extinguishes unprotected flames in its area that are torch-sized or smaller.\n• It hedges out vapor, gas, and fog that can be dispersed by strong wind.\n• The area is difficult terrain for creatures other than you.\n• The attack rolls of ranged weapon attacks have disadvantage if they pass in or out of the wind."
+    },
+    "Storm Sphere": {
+      level: "4th",
+      school: "Evocation",
+      castingTime: "Action",
+      range: "150 feet",
+      components: "V, S",
+      duration: "Concentration, up to 1 minute",
+      description: "A 20-foot-radius sphere of whirling air springs into existence centered on a point you choose within range. The sphere remains for the spell's duration. Each creature in the sphere when it appears or that ends its turn there must succeed on a Strength saving throw or take 2d6 bludgeoning damage. The sphere's space is difficult terrain.\n\nUntil the spell ends, you can use a bonus action on each of your turns to cause a bolt of lightning to leap from the center of the sphere toward one creature you choose within 60 feet of the center. Make a ranged spell attack. You have advantage on the attack roll if the target is in the sphere. On a hit, the target takes 4d6 lightning damage.\n\nCreatures within 30 feet of the sphere have disadvantage on Wisdom (Perception) checks made to listen.\n\nAt Higher Levels. When you cast this spell using a spell slot of 5th level or higher, the damage increases for each of its effects by 1d6 for each slot level above 4th."
+    },
+    "Control Winds": {
+      level: "5th",
+      school: "Transmutation",
+      castingTime: "Action",
+      range: "300 feet",
+      components: "V, S",
+      duration: "Concentration, up to 1 hour",
+      description: "You take control of the air in a 100-foot cube that you can see within range. Choose one of the following effects when you cast the spell. The effect lasts for the spell's duration, unless you use your action on a later turn to switch to a different effect. You can also use your action to temporarily halt the effect or to restart one you've halted.\n\n• Gusts. A wind picks up within the cube, continually blowing in a horizontal direction that you choose. You choose the intensity of the wind: calm, moderate, or strong. If the wind is moderate or strong, ranged weapon attacks that pass through it or that are made against targets within the cube have disadvantage on their attack rolls. If the wind is strong, any creature moving against the wind must spend 1 extra foot of movement for each foot moved.\n\n• Downdraft. You cause a sustained blast of strong wind to blow downward from the top of the cube. Ranged weapon attacks that pass through the cube or that are made against targets within it have disadvantage on their attack rolls. A creature must make a Strength saving throw if it flies into the cube for the first time on a turn or starts its turn there flying. On a failed save, the creature is knocked prone.\n\n• Updraft. You cause a sustained updraft within the cube, rising upward from the cube's bottom edge. Creatures that end a fall within the cube take only half damage from the fall. When a creature in the cube makes a vertical jump, the creature can jump up to 10 feet higher than normal."
+    },
+    "Spring's Touch": {
+      level: "1st",
+      school: "Abjuration",
+      castingTime: "Action",
+      range: "30 feet",
+      components: "V, S, M (a drop of pure spring water)",
+      duration: "Instantaneous",
+      description: "You channel the purifying essence of a sacred spring toward a creature within range. The target regains 2d6 + your spellcasting ability modifier hit points.\n\nAt Higher Levels. When you cast this spell using a spell slot of 2nd level or higher, the healing increases by 2d6 for each slot level above 1st."
+    },
+    "Rime's Binding Ice": {
+      level: "2nd",
+      school: "Evocation",
+      castingTime: "Action",
+      range: "Self (30-foot cone)",
+      components: "S, M (a vial of meltwater)",
+      duration: "Instantaneous",
+      description: "A burst of cold energy emanates from you in a 30-foot cone. Each creature in that area must make a Constitution saving throw. On a failed save, a creature takes 3d8 cold damage and is hindered by ice formations for 1 minute, or until it or another creature within reach of it uses an action to break away the ice. A creature hindered by ice has its speed reduced to 0. On a successful save, a creature takes half as much damage and isn't hindered by ice.\n\nAt Higher Levels. When you cast this spell using a spell slot of 3rd level or higher, increase the cold damage by 1d8 for each slot level above 2nd."
+    },
+    "Riptides": {
+      level: "3rd",
+      school: "Conjuration",
+      castingTime: "Action",
+      range: "Self (30-foot cone)",
+      components: "V, S, M (a conch shell)",
+      duration: "Instantaneous",
+      description: "You summon waves of water that flow outward in a 30-foot emanation. Choose up to 6 creatures within the emanation, each creature regains 2d6 + your spellcasting ability modifier hit points and is moved up to 15 feet in a direction of your choice (this movement doesn't provoke opportunity attacks).\n\nAt Higher Levels. When you cast this spell using a spell slot of 4th level or higher, the healing increases by 1d6 for each slot level above 3rd."
+    },
+    "Control Water": {
+      level: "4th",
+      school: "Transmutation",
+      castingTime: "Action",
+      range: "300 feet",
+      components: "V, S, M (a drop of water and a pinch of dust)",
+      duration: "Concentration, up to 10 minutes",
+      description: "Until the spell ends, you control any water inside an area you choose that is a Cube up to 100 feet on a side, using one of the following effects. As a Magic action on your later turns, you can repeat the same effect or choose a different one.\n\n• Flood. You cause the water level of all standing water in the area to rise by as much as 20 feet. If you choose an area in a large body of water, you instead create a 20-foot tall wave that travels from one side of the area to the other and then crashes. Any Huge or smaller vehicles in the wave's path are carried with it to the other side. Any Huge or smaller vehicles struck by the wave have a 25 percent chance of capsizing. The water level remains elevated until the spell ends or you choose a different effect. If this effect produced a wave, the wave repeats on the start of your next turn while the flood effect lasts.\n\n• Part Water. You part water in the area and create a trench. The trench extends across the spell's area, and the separated water forms a wall to either side. The trench remains until the spell ends or you choose a different effect. The water then slowly fills in the trench over the course of the next round until the normal water level is restored.\n\n• Redirect Flow. You cause flowing water in the area to move in a direction you choose, even if the water has to flow over obstacles, up walls, or in other unlikely directions. The water in the area moves as you direct it, but once it moves beyond the spell's area, it resumes its flow based on the terrain. The water continues to move in the direction you chose until the spell ends or you choose a different effect.\n\n• Whirlpool. You cause a whirlpool to form in the center of the area, which must be at least 50 feet square and 25 feet deep. The whirlpool lasts until you choose a different effect or the spell ends. The whirlpool is 5 feet wide at the base, up to 50 feet wide at the top, and 25 feet tall. Any creature in the water and within 25 feet of the whirlpool is pulled 10 feet toward it. When a creature enters the whirlpool for the first time on a turn or ends its turn there, it makes a Strength saving throw. On a failed save, the creature takes 2d8 Bludgeoning damage. On a successful save, the creature takes half as much damage. A creature can swim away from the whirlpool only if it first takes an action to pull away and succeeds on a Strength (Athletics) check against your spell save DC."
+    },
+    "Maelstrom": {
+      level: "5th",
+      school: "Evocation",
+      castingTime: "Action",
+      range: "120 feet",
+      components: "V, S, M (paper or leaf in the shape of a funnel)",
+      duration: "Concentration, up to 1 minute",
+      description: "A mass of 5-foot-deep water appears and swirls in a 30-foot radius centered on a point you can see within range. The point must be on ground or in a body of water. Until the spell ends, that area is difficult terrain, and any creature that starts its turn there must succeed on a Strength saving throw or take 6d6 bludgeoning damage and be pulled 10 feet toward the center."
+    },
+    "Earth Shield": {
+      level: "1st",
+      school: "Conjuration",
+      castingTime: "Reaction, which you take when you are hit by an attack or targeted by the magic missile spell",
+      range: "Self",
+      components: "V, S",
+      duration: "1 round",
+      description: "You conjure an earthen shield which forms around your arm. For the duration, you gain 15 temporary hit points, including against the triggering attack.\n\nAt Higher Levels. When you cast this spell using a spell slot of 2nd level or higher, you gain an additional 10 temporary hit points for each slot level above 1st."
+    },
+    "Earthen Grasp": {
+      level: "2nd",
+      school: "Transmutation",
+      castingTime: "Action",
+      range: "30 feet",
+      components: "V, S, M (a miniature hand sculpted from clay)",
+      duration: "Concentration, up to 1 minute",
+      description: "You choose a 5-foot-square unoccupied space on the ground that you can see within range. A Medium hand made from compacted soil rises there and reaches for one creature you can see within 5 feet of it. The target must make a Strength saving throw. On a failed save, the target takes 2d6 bludgeoning damage and is restrained for the spell's duration.\n\nAs an action, you can cause the hand to crush the restrained target, who must make a Strength saving throw. It takes 2d6 bludgeoning damage on a failed save, or half as much damage on a successful one.\n\nTo break out, the restrained target can use its action to make a Strength check against your spell save DC. On a success, the target escapes and is no longer restrained by the hand.\n\nAs an action, you can cause the hand to reach for a different creature or to move to a different unoccupied space within range. The hand releases a restrained target if you do either."
+    },
+    "Erupting Earth": {
+      level: "3rd",
+      school: "Transmutation",
+      castingTime: "Action",
+      range: "120 feet",
+      components: "V, S, M (a piece of obsidian)",
+      duration: "Instantaneous",
+      description: "Choose a point you can see on the ground within range. A fountain of churned earth and stone erupts in a 20-foot cube centered on that point. Each creature in that area must make a Dexterity saving throw. A creature takes 3d12 bludgeoning damage on a failed save, or half as much damage on a successful one. Additionally, the ground in that area becomes difficult terrain until cleared away. Each 5-foot-square portion of the area requires at least 1 minute to clear by hand.\n\nAt Higher Levels. When you cast this spell using a spell slot of 4th level or higher, the damage increases by 1d12 for each slot level above 3rd."
+    },
+    "Stoneskin": {
+      level: "4th",
+      school: "Transmutation",
+      castingTime: "Action",
+      range: "Touch",
+      components: "V, S, M (diamond dust worth 100+ GP, which the spell consumes)",
+      duration: "Concentration, up to 1 hour",
+      description: "Until the spell ends, one willing creature you touch has Resistance to Bludgeoning, Piercing, and Slashing damage."
+    },
+    "Wall of Stone": {
+      level: "5th",
+      school: "Evocation",
+      castingTime: "Action",
+      range: "120 feet",
+      components: "V, S, M (a cube of granite)",
+      duration: "Concentration, up to 10 minutes",
+      description: "A nonmagical wall of solid stone springs into existence at a point you choose within range. The wall is 6 inches thick and is composed of ten 10-foot-by-10-foot panels. Each panel must be contiguous with another panel. Alternatively, you can create 10-foot-by-20-foot panels that are only 3 inches thick.\n\nIf the wall cuts through a creature's space when it appears, the creature is pushed to one side of the wall (you choose which side). If a creature would be surrounded on all sides by the wall (or the wall and another solid surface), that creature can make a Dexterity saving throw. On a success, it can use its Reaction to move up to its Speed so that it is no longer enclosed by the wall.\n\nThe wall can have any shape you desire, though it can't occupy the same space as a creature or object. The wall doesn't need to be vertical or rest on a firm foundation. It must, however, merge with and be solidly supported by existing stone. Thus, you can use this spell to bridge a chasm or create a ramp.\n\nIf you create a span greater than 20 feet in length, you must halve the size of each panel to create supports. You can crudely shape the wall to create battlements and the like.\n\nThe wall is an object made of stone that can be damaged and thus breached. Each panel has AC 15 and 30 Hit Points per inch of thickness, and it has Immunity to Poison and Psychic damage. Reducing a panel to 0 Hit Points destroys it and might cause connected panels to collapse at the DM's discretion.\n\nIf you maintain your Concentration on this spell for its full duration, the wall becomes permanent and can't be dispelled. Otherwise, the wall disappears when the spell ends."
+    },
+    "Chromatic Orb": {
+      level: "1st",
+      school: "Evocation",
+      castingTime: "Action",
+      range: "90 feet",
+      components: "V, S, M (a diamond worth 50+ GP)",
+      duration: "Instantaneous",
+      description: "You hurl an orb of energy at a target within range. Choose Acid, Cold, Fire, Lightning, Poison, or Thunder for the type of orb you create, and then make a ranged spell attack against the target. On a hit, the target takes 3d8 damage of the chosen type.\n\nIf you roll the same number on two or more of the d8s, the orb leaps to a different target of your choice within 30 feet of the target. Make an attack roll against the new target, and make a new damage roll. The orb can't leap again unless you cast the spell with a level 2+ spell slot.\n\nUsing a Higher-Level Spell Slot. The damage increases by 1d8 for each spell slot level above 1. The orb can leap a maximum number of times equal to the level of the slot expended, and a creature can be targeted only once by each casting of this spell."
+    },
+    "Dragon's Breath": {
+      level: "2nd",
+      school: "Transmutation",
+      castingTime: "Bonus Action",
+      range: "Touch",
+      components: "V, S, M (a hot pepper)",
+      duration: "Concentration, up to 1 minute",
+      description: "You touch one willing creature and imbue it with the power to spew magical energy from its mouth, provided it has one. Choose acid, cold, fire, lightning, or poison. Until the spell ends, the creature can use an action to exhale energy of the chosen type in a 15-foot cone. Each creature in that area must make a Dexterity saving throw, taking 3d6 damage of the chosen type on a failed save, or half as much damage on a successful one.\n\nAt Higher Levels. When you cast this spell using a spell slot of 3rd level or higher, the damage increases by 1d6 for each slot level above 2nd."
+    },
+    "Protection from Energy": {
+      level: "3rd",
+      school: "Abjuration",
+      castingTime: "Action",
+      range: "Touch",
+      components: "V, S",
+      duration: "Concentration, up to 1 hour",
+      description: "For the duration, the willing creature you touch has resistance to one damage type of your choice: acid, cold, fire, lightning, or thunder."
+    },
+    "Conjure Elemental Guardians": {
+      level: "4th",
+      school: "Conjuration",
+      castingTime: "Action",
+      range: "Self",
+      components: "V, S",
+      duration: "Concentration, up to 10 minutes",
+      description: "You conjure elemental spirits that swirl around you in a 10-foot Emanation for the duration. Whenever the Emanation enters the space of a creature you can see and whenever a creature you can see enters the Emanation or ends its turn there, you can force that creature to make a Wisdom saving throw. The creature takes 5d8 Fire, Cold, Lightning, or Thunder damage (your choice when you cast the spell) on a failed save or half as much damage on a successful one. A creature makes this save only once per turn.\n\nIn addition, you can take the Disengage action as a Bonus Action for the spell's duration.\n\nUsing a Higher-Level Spell Slot. The damage increases by 1d8 for each spell slot level above 4."
+    },
+    "Wrath of the Elements": {
+      level: "5th",
+      school: "Evocation",
+      castingTime: "Action",
+      range: "150 feet",
+      components: "V, S, M",
+      duration: "1 minute",
+      description: "You choose a point within range and unleash a storm of elemental fury. Elemental energy erupts in a 20-foot radius sphere centered on that point. Choose fire, cold, lightning, or thunder for the type of energy released. Each creature in the area must make a saving throw: Dexterity for fire and lightning, or Constitution for cold and thunder. A creature takes 6d6 damage of the chosen type on a failed save, or half as much on a successful one.\n\nThe eruption leaves behind a lingering aftereffect tied to the chosen element, which lasts for the duration:\n\n• Fire. When a creature enters the area for the first time on a turn or starts its turn there, it must make a Constitution saving throw, taking 2d6 fire damage on a failed save, or half as much on a success.\n\n• Cold. The area freezes over, becoming difficult terrain. When a creature enters the area for the first time on a turn or starts its turn there, the creature makes a Dexterity saving throw or falls Prone.\n\n• Lightning. The area crackles with unstable energy. When a creature moves into or within the area, it takes 1d6 lightning damage.\n\n• Thunder. When a creature enters the area for the first time on a turn or starts its turn there, it must succeed on a Constitution saving throw or suffer disadvantage on attack rolls and Dexterity saving throws until the start of its next turn.\n\nAt Higher Levels. When you cast this spell using a spell slot of 6th level or higher, the initial damage increases by 1d6 for each slot level above 5th."
+    },
+    "Mind Sliver": {
+      level: "Cantrip",
+      school: "Enchantment",
+      castingTime: "Action",
+      range: "60 feet",
+      components: "V",
+      duration: "1 round",
+      description: "You drive a disorienting spike of psychic energy into the mind of one creature you can see within range. The target must succeed on an Intelligence saving throw or take 1d6 psychic damage and subtract 1d4 from the next saving throw it makes before the end of your next turn.\n\nThis spell's damage increases by 1d6 when you reach certain levels: 5th level (2d6), 11th level (3d6), and 17th level (4d6)."
+    },
+    "Temporal Skip": {
+      level: "1st",
+      school: "Transmutation",
+      castingTime: "Action",
+      range: "60 feet",
+      components: "V, S",
+      duration: "Instantaneous",
+      description: "You speak a word of power that causes time to briefly skip around a creature you can see within range. The target must make a Wisdom saving throw. On a failed save, the target becomes temporally displaced until the end of its next turn. While temporally displaced, the target skips its next turn, and melee attacks against it have advantage.\n\nAt Higher Levels. When you cast this spell using a spell slot of 2nd level or higher, you can target one additional creature for each slot level above 1st. The creatures must be within 30 feet of each other when you target them."
+    },
+    "Fortune's Favor": {
+      level: "2nd",
+      school: "Divination",
+      castingTime: "1 minute",
+      range: "60 feet",
+      components: "V, S, M (a white pearl worth at least 100 gp, which the spell consumes)",
+      duration: "1 hour",
+      description: "You impart latent luck to yourself or one willing creature you can see within range. When the chosen creature makes an attack roll, an ability check, or a saving throw before the spell ends, it can dismiss this spell on itself to roll an additional d20 and choose which of the d20s to use. Alternatively, when an attack roll is made against the chosen creature, it can dismiss this spell on itself to roll a d20 and choose which of the d20s to use, the one it rolled or the one the attacker rolled.\n\nIf the original d20 roll has advantage or disadvantage, the creature rolls the additional d20 after advantage or disadvantage has been applied to the original roll.\n\nAt Higher Levels. When you cast this spell using a spell slot of 3rd level or higher, you can target one additional creature for each slot level above 2nd."
+    },
+    "Staggering Smite": {
+      level: "4th",
+      school: "Enchantment",
+      castingTime: "Bonus Action, which you take immediately after hitting a creature with a Melee weapon or an Unarmed Strike",
+      range: "Self",
+      components: "V",
+      duration: "Instantaneous",
+      description: "The target takes an extra 4d6 Psychic damage from the attack, and the target must succeed on a Wisdom saving throw or have the Stunned condition until the end of your next turn.\n\nUsing a Higher-Level Spell Slot. The extra damage increases by 1d6 for each spell slot level above 4."
+    },
+    "Temporal Shunt": {
+      level: "5th",
+      school: "Transmutation",
+      castingTime: "Reaction, taken when a creature you see makes an attack roll or starts to cast a spell",
+      range: "120 feet",
+      components: "V, S",
+      duration: "1 round",
+      description: "You target the triggering creature, which must succeed on a Wisdom saving throw or vanish, being thrown to another point in time and causing the attack to miss or the spell to be wasted. At the start of its next turn, the target reappears where it was or in the closest unoccupied space. The target doesn't remember you casting the spell or being affected by it.\n\nAt Higher Levels. When you cast this spell using a spell slot of 6th level or higher, you can target one additional creature for each slot level above 5th. All targets must be within 30 feet of each other."
+    },
+    "Sapping Sting": {
+      level: "Cantrip",
+      school: "Necromancy",
+      castingTime: "Action",
+      range: "30 feet",
+      components: "V, S",
+      duration: "Instantaneous",
+      description: "You sap the vitality of one creature you can see in range. The target must succeed on a Constitution saving throw or take 1d4 necrotic damage and fall prone.\n\nThis spell's damage increases by 1d4 when you reach 5th level (2d4), 11th level (3d4), and 17th level (4d4)."
+    },
+    "Magnify Gravity": {
+      level: "1st",
+      school: "Transmutation",
+      castingTime: "Action",
+      range: "60 feet",
+      components: "V, S",
+      duration: "1 round",
+      description: "The gravity in a 10-foot-radius sphere centered on a point you can see within range increases for a moment. Each creature in the sphere on the turn when you cast the spell must make a Constitution saving throw. On a failed save, a creature takes 2d8 force damage, and its speed is halved until the end of its next turn. On a successful save, a creature takes half as much damage and suffers no reduction to its speed.\n\nUntil the start of your next turn, any object that isn't being worn or carried in the sphere requires a successful Strength check against your spell save DC to pick up or move.\n\nAt Higher Levels. When you cast this spell using a spell slot of 2nd level or higher, the damage increases by 1d8 for each slot level above 1st."
+    },
+    "Immovable Object": {
+      level: "2nd",
+      school: "Transmutation",
+      castingTime: "Action",
+      range: "Touch",
+      components: "V, S, M (gold dust worth at least 25 gp, which the spell consumes)",
+      duration: "1 hour",
+      description: "You touch an object that weighs no more than 10 pounds and cause it to become magically fixed in place. You and the creatures you designate when you cast this spell can move the object normally. You can also set a password that, when spoken within 5 feet of the object, suppresses this spell for 1 minute.\n\nIf the object is fixed in the air, it can hold up to 4,000 pounds of weight. More weight causes the object to fall. Otherwise, a creature can use an action to make a Strength check against your spell save DC. On a success, the creature can move the object up to 10 feet.\n\nAt Higher Levels. If you cast this spell using a spell slot of 4th or 5th level, the DC to move the object increases by 5, it can carry up to 8,000 pounds of weight, and the duration increases to 24 hours. If you cast this spell using a spell slot of 6th level or higher, the DC to move the object increases by 10, it can carry up to 20,000 pounds of weight, and the effect is permanent until dispelled."
+    },
+    "Pulse Wave": {
+      level: "3rd",
+      school: "Evocation",
+      castingTime: "Action",
+      range: "Self (30-foot cone)",
+      components: "V, S",
+      duration: "Instantaneous",
+      description: "You create intense pressure, unleash it in a 30-foot cone, and decide whether the pressure pulls or pushes creatures and objects. Each creature in that cone must make a Constitution saving throw. A creature takes 6d6 force damage on a failed save, or half as much damage on a successful one. And every creature that fails the save is either pulled 15 feet toward you or pushed 15 feet away from you, depending on the choice you made for the spell.\n\nIn addition, unsecured objects that are completely within the cone are likewise pulled or pushed 15 feet.\n\nAt Higher Levels. When you cast this spell using a spell slot of 4th level or higher, the damage increases by 1d6 and the distance pulled or pushed increases by 5 feet for each slot level above 3rd."
+    },
+    "Gravity Sinkhole": {
+      level: "4th",
+      school: "Evocation",
+      castingTime: "Action",
+      range: "120 feet",
+      components: "V, S, M (a black marble)",
+      duration: "Instantaneous",
+      description: "A 20-foot-radius sphere of crushing force forms at a point you can see within range and tugs at the creatures there. Each creature in the sphere must make a Constitution saving throw. On a failed save, the creature takes 5d10 force damage, and is pulled in a straight line toward the center of the sphere, ending in an unoccupied space as close to the center as possible (even if that space is in the air). On a successful save, the creature takes half as much damage and isn't pulled.\n\nAt Higher Levels. When you cast this spell using a spell slot of 5th level or higher, the damage increases by 1d10 for each slot level above 4th."
     }
+  };
+
+  // Spell slots calculation
+  const getSpellSlotsForLevel = (level) => {
+    const spellSlotTable = {
+      1: { 1: 2 },
+      2: { 1: 3 },
+      3: { 1: 4, 2: 2 },
+      4: { 1: 4, 2: 3 },
+      5: { 1: 4, 2: 3, 3: 2 },
+      6: { 1: 4, 2: 3, 3: 3 },
+      7: { 1: 4, 2: 3, 3: 3, 4: 1 },
+      8: { 1: 4, 2: 3, 3: 3, 4: 2 },
+      9: { 1: 4, 2: 3, 3: 3, 4: 3, 5: 1 },
+      10: { 1: 4, 2: 3, 3: 3, 4: 3, 5: 2 },
+      11: { 1: 4, 2: 3, 3: 3, 4: 3, 5: 2, 6: 1 },
+      12: { 1: 4, 2: 3, 3: 3, 4: 3, 5: 2, 6: 1 },
+      13: { 1: 4, 2: 3, 3: 3, 4: 3, 5: 2, 6: 1, 7: 1 },
+      14: { 1: 4, 2: 3, 3: 3, 4: 3, 5: 2, 6: 1, 7: 1 },
+      15: { 1: 4, 2: 3, 3: 3, 4: 3, 5: 2, 6: 1, 7: 1, 8: 1 },
+      16: { 1: 4, 2: 3, 3: 3, 4: 3, 5: 2, 6: 1, 7: 1, 8: 1 },
+      17: { 1: 4, 2: 3, 3: 3, 4: 2, 5: 2, 6: 1, 7: 1, 8: 1, 9: 1 },
+      18: { 1: 4, 2: 3, 3: 3, 4: 3, 5: 2, 6: 1, 7: 1, 8: 1, 9: 1 },
+      19: { 1: 4, 2: 3, 3: 3, 4: 3, 5: 2, 6: 2, 7: 1, 8: 1, 9: 1 },
+      20: { 1: 4, 2: 3, 3: 3, 4: 3, 5: 2, 6: 2, 7: 2, 8: 1, 9: 1 }
+    };
+    
+    return spellSlotTable[level] || {};
+  };
+
+  // Update spell slots when level changes
+  useEffect(() => {
+    const newMaxSlots = getSpellSlotsForLevel(level);
+    setSpellSlots(prev => {
+      const updated = { ...prev };
+      for (let slotLevel = 1; slotLevel <= 9; slotLevel++) {
+        const maxSlots = newMaxSlots[slotLevel] || 0;
+        updated[slotLevel] = {
+          max: maxSlots,
+          current: Math.min(prev[slotLevel].current, maxSlots)
+        };
+      }
+      return updated;
+    });
+  }, [level]);
+
+  // Prepared spells (hardcoded as requested)
+  const preparedSpells = [
+    'Guidance', 'Druidcraft', 'Thorn Whip', 'Primal Savagery', // Cantrips
+    'Cure Wounds', 'Healing Word', 'Faerie Fire', 'Entangle', // 1st level
+    'Moonbeam', 'Heat Metal', 'Pass without Trace', 'Wild Shape', // 2nd level
+    'Conjure Animals', 'Call Lightning', 'Dispel Magic', // 3rd level
+    'Polymorph', 'Freedom of Movement', 'Giant Insect', // 4th level
+    'Greater Restoration', 'Tree Stride', 'Scrying' // 5th level
+  ];
+
+  const longRest = () => {
+    // Reset spell slots
+    const maxSlots = getSpellSlotsForLevel(level);
+    setSpellSlots(prev => {
+      const updated = { ...prev };
+      for (let slotLevel = 1; slotLevel <= 9; slotLevel++) {
+        updated[slotLevel] = {
+          max: maxSlots[slotLevel] || 0,
+          current: maxSlots[slotLevel] || 0
+        };
+      }
+      return updated;
+    });
+    
+    // Reset used elements
+    setUsedElements([]);
+    
+    // Reset wild shape uses
+    setWildShapeUses(maxWildShapeUses);
+    
+    // Reset Wild Resurgence daily ability
+    setWildResurgenceUsed(false);
+    
+    // Recover pendant charges
+    const pendantData = getPendantData();
+    let recovered = 0;
+    
+    if (pendantState === 'dormant') {
+      recovered = Math.floor(Math.random() * 4) + 1 + 2;
+    } else if (pendantState === 'awakened') {
+      recovered = Math.floor(Math.random() * 6) + 1 + 2;
+    } else {
+      recovered = Math.floor(Math.random() * 6) + 1 + 4;
+    }
+    
+    setPendantCharges(Math.min(pendantData.maxCharges, pendantCharges + recovered));
+    
+    alert(`Descanso largo completado!\n• Espacios de conjuro restaurados\n• Elementos de comunión reiniciados\n• Wild Shape: ${maxWildShapeUses} usos\n• Pendant: +${recovered} cargas`);
+  };
+
+  const shortRest = () => {
+    // Recover 1 use of Wild Shape
+    setWildShapeUses(prev => Math.min(maxWildShapeUses, prev + 1));
+    
+    alert('Descanso corto completado!\n• Wild Shape: +1 uso recuperado');
+  };
+
+  const wildResurgenceSpellToWild = () => {
+    // Check if any spell slots are available
+    const availableSlots = Object.entries(spellSlots).filter(([_, slots]) => slots.current > 0);
+    
+    if (availableSlots.length === 0) {
+      alert('No tienes espacios de conjuro disponibles');
+      return;
+    }
+    
+    if (wildShapeUses >= maxWildShapeUses) {
+      alert('Ya tienes el máximo de usos de Wild Shape');
+      return;
+    }
+    
+    // Find the lowest level spell slot available
+    const lowestSlot = availableSlots.reduce((lowest, current) => {
+      return parseInt(current[0]) < parseInt(lowest[0]) ? current : lowest;
+    });
+    
+    const slotLevel = parseInt(lowestSlot[0]);
+    
+    // Consume the spell slot and gain Wild Shape
+    setSpellSlots(prev => ({
+      ...prev,
+      [slotLevel]: {
+        ...prev[slotLevel],
+        current: prev[slotLevel].current - 1
+      }
+    }));
+    
+    setWildShapeUses(prev => Math.min(maxWildShapeUses, prev + 1));
+    
+    alert(`Has gastado 1 espacio de nivel ${slotLevel} para recuperar 1 uso de Wild Shape`);
+  };
+
+  const wildResurgenceWildToSpell = () => {
+    if (wildShapeUses <= 0) {
+      alert('No tienes usos de Wild Shape disponibles');
+      return;
+    }
+    
+    if (wildResurgenceUsed) {
+      alert('Ya has usado esta habilidad hoy. Se reinicia en descanso largo.');
+      return;
+    }
+    
+    if (spellSlots[1].current >= spellSlots[1].max) {
+      alert('Ya tienes el máximo de espacios de nivel 1');
+      return;
+    }
+    
+    // Consume Wild Shape and gain level 1 spell slot
+    setWildShapeUses(prev => prev - 1);
+    setSpellSlots(prev => ({
+      ...prev,
+      1: {
+        ...prev[1],
+        current: Math.min(prev[1].max, prev[1].current + 1)
+      }
+    }));
+    
+    setWildResurgenceUsed(true);
+    
+    alert('Has gastado 1 uso de Wild Shape para recuperar 1 espacio de nivel 1');
+  };
+  const castSpell = (spellName, slotLevel) => {
+    if (spellSlots[slotLevel].current <= 0) {
+      alert('No tienes espacios de conjuro de ese nivel disponibles');
+      return;
+    }
+    
+    setSpellSlots(prev => ({
+      ...prev,
+      [slotLevel]: {
+        ...prev[slotLevel],
+        current: prev[slotLevel].current - 1
+      }
+    }));
+    
+    alert(`Has lanzado ${spellName} usando un espacio de nivel ${slotLevel}`);
+    setShowCastModal(false);
+    setSpellToCast(null);
   };
 
   const morphbladeOrbs = {
@@ -369,6 +853,14 @@ const ElementalistSheet = () => {
       return;
     }
     
+    if (wildShapeUses <= 0) {
+      alert('No tienes usos de Wild Shape disponibles para iniciar la comunión elemental');
+      return;
+    }
+    
+    // Consume 1 uso de Wild Shape
+    setWildShapeUses(prev => prev - 1);
+    
     setActiveElement(element);
     setCommunionDuration(level >= 10 ? 60 : 10);
     if (element !== 'aether') {
@@ -410,7 +902,7 @@ const ElementalistSheet = () => {
     }
 
     if (activeOrb === 'air' && bladeSeparated) {
-      // DUAL ATTACK SYSTEM (mostrar el dado extra del crítico en el texto)
+      // DUAL ATTACK SYSTEM
       const d20_1 = rollDie(20);
       const d20_2 = rollDie(20);
       const attack1Total = d20_1 + attackBonus;
@@ -425,7 +917,6 @@ const ElementalistSheet = () => {
       const attack1Crit = d20_1 === 20;
       const attack2Crit = d20_2 === 20;
 
-      // Guardamos los dados de crítico para mostrarlos en el texto
       let critRoll1 = null;
       let critRoll2 = null;
 
@@ -438,7 +929,6 @@ const ElementalistSheet = () => {
         damage2 += critRoll2;
       }
 
-      // Maelstrom: si cualquier ataque es crítico, añade sus dados extra y muéstralos
       let totalMaelstromDamage = maelstromDamage;
       if ((attack1Crit || attack2Crit) && level >= 6) {
         let baseDice = 1;
@@ -640,7 +1130,7 @@ const ElementalistSheet = () => {
 
   // Block/unblock body scroll when modal opens/closes
   useEffect(() => {
-    if (showSpellModal) {
+    if (showSpellModal || showCastModal) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = 'unset';
@@ -650,13 +1140,29 @@ const ElementalistSheet = () => {
     return () => {
       document.body.style.overflow = 'unset';
     };
-  }, [showSpellModal]);
+  }, [showSpellModal, showCastModal]);
 
   return (
     <div className="max-w-6xl mx-auto p-6 bg-gray-900 text-white">
       <h1 className="text-3xl font-bold text-center mb-6 text-purple-400">
         Circle of the Elementalists - Character Sheet
       </h1>
+      
+      {/* Rest Buttons */}
+      <div className="grid grid-cols-2 gap-4 mb-6">
+        <button 
+          onClick={longRest}
+          className="px-6 py-3 bg-green-600 hover:bg-green-700 rounded-lg font-bold text-lg flex items-center justify-center gap-2"
+        >
+          🛏️ Descanso Largo
+        </button>
+        <button 
+          onClick={shortRest}
+          className="px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-bold text-lg flex items-center justify-center gap-2"
+        >
+          ⏰ Descanso Corto
+        </button>
+      </div>
       
       {/* Character Stats */}
       <div className="grid grid-cols-5 gap-4 mb-6 p-4 bg-gray-800 rounded-lg">
@@ -700,6 +1206,96 @@ const ElementalistSheet = () => {
             {getCalculatedSpellSaveDC()}
           </p>
           <p className="text-xs text-gray-400 mt-1">8 + Prof + Sab + Pendant</p>
+        </div>
+      </div>
+
+      {/* Wild Shape Counter */}
+      <div className="mb-6 p-4 bg-gray-800 rounded-lg">
+        <h2 className="text-xl font-bold mb-2 text-orange-400">Wild Shape</h2>
+        <div className="flex items-center gap-4 mb-3">
+          <div className="text-lg font-bold">
+            <span className={wildShapeUses > 0 ? 'text-green-400' : 'text-red-400'}>
+              {wildShapeUses}
+            </span>
+            <span className="text-gray-400">/{maxWildShapeUses} usos</span>
+          </div>
+          <div className="flex gap-1">
+            {Array.from({ length: maxWildShapeUses }, (_, i) => (
+              <div
+                key={i}
+                className={`w-4 h-4 rounded-full ${
+                  i < wildShapeUses ? 'bg-orange-400' : 'bg-gray-500'
+                }`}
+              />
+            ))}
+          </div>
+          <button
+            onClick={() => setWildShapeUses(Math.max(0, wildShapeUses - 1))}
+            disabled={wildShapeUses <= 0}
+            className="px-3 py-1 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded text-sm"
+          >
+            Usar (-1)
+          </button>
+        </div>
+        
+        {level >= 5 && (
+          <div className="border-t border-gray-600 pt-3">
+            <h3 className="text-sm font-semibold text-blue-300 mb-2">Wild Resurgence (Nivel 5+)</h3>
+            <div className="flex gap-2 flex-wrap">
+              <button
+                onClick={wildResurgenceSpellToWild}
+                disabled={wildShapeUses >= maxWildShapeUses}
+                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded text-sm"
+              >
+                📜→🐻 Espacio → Wild Shape
+              </button>
+              <button
+                onClick={wildResurgenceWildToSpell}
+                disabled={wildShapeUses <= 0 || wildResurgenceUsed}
+                className="px-3 py-1 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded text-sm"
+              >
+                🐻→📜 Wild Shape → Nivel 1
+                {wildResurgenceUsed && ' (Usado)'}
+              </button>
+            </div>
+            <p className="text-xs text-gray-400 mt-1">
+              • Cualquier espacio → Wild Shape (ilimitado)<br/>
+              • Wild Shape → Espacio nivel 1 (1 vez por descanso largo)
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Spell Slots */}
+      <div className="mb-6 p-4 bg-gray-800 rounded-lg">
+        <h2 className="text-xl font-bold mb-4 text-green-400">Espacios de Conjuro</h2>
+        
+        <div className="grid grid-cols-4 gap-2">
+          {Object.entries(spellSlots).map(([slotLevel, slots]) => {
+            if (slots.max === 0) return null;
+            
+            return (
+              <div key={slotLevel} className="bg-gray-700 p-3 rounded text-center">
+                <div className="text-sm font-medium text-blue-300 mb-1">Nivel {slotLevel}</div>
+                <div className="text-lg font-bold">
+                  <span className={slots.current > 0 ? 'text-green-400' : 'text-red-400'}>
+                    {slots.current}
+                  </span>
+                  <span className="text-gray-400">/{slots.max}</span>
+                </div>
+                <div className="flex gap-1 mt-2 justify-center flex-wrap">
+                  {Array.from({ length: slots.max }, (_, i) => (
+                    <div
+                      key={i}
+                      className={`w-3 h-3 rounded-full ${
+                        i < slots.current ? 'bg-blue-400' : 'bg-gray-500'
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -769,13 +1365,6 @@ const ElementalistSheet = () => {
               );
             })}
           </div>
-          
-          <button 
-            onClick={() => setUsedElements([])}
-            className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded"
-          >
-            Descanso Largo (Reset Elementos)
-          </button>
           
           {/* Available Spells */}
           {activeElement && (
@@ -1032,7 +1621,7 @@ const ElementalistSheet = () => {
           </select>
         </div>
         
-        <div className="grid grid-cols-3 gap-4 mb-4">
+        <div className="grid grid-cols-2 gap-4 mb-4">
           <div>
             <label className="block text-sm font-medium mb-1">Cargas Actuales</label>
             <input 
@@ -1051,28 +1640,6 @@ const ElementalistSheet = () => {
             <label className="block text-sm font-medium mb-1">Cargas Máximas</label>
             <p className="p-2 bg-gray-700 rounded border text-center">{getPendantData().maxCharges}</p>
           </div>
-          <div>
-            <button 
-              onClick={() => {
-                const pendantData = getPendantData();
-                let recovered = 0;
-                
-                if (pendantState === 'dormant') {
-                  recovered = Math.floor(Math.random() * 4) + 1 + 2;
-                } else if (pendantState === 'awakened') {
-                  recovered = Math.floor(Math.random() * 6) + 1 + 2;
-                } else {
-                  recovered = Math.floor(Math.random() * 6) + 1 + 4;
-                }
-                
-                setPendantCharges(Math.min(pendantData.maxCharges, pendantCharges + recovered));
-                alert(`Recuperadas ${recovered} cargas al amanecer (${pendantData.recoveryDice})`);
-              }}
-              className="h-full px-4 py-2 bg-yellow-600 hover:bg-yellow-700 rounded"
-            >
-              Recuperar (Amanecer)
-            </button>
-          </div>
         </div>
         
         <div className="text-sm text-gray-300">
@@ -1085,6 +1652,78 @@ const ElementalistSheet = () => {
               ))}
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Prepared Spells */}
+      <div className="mt-6 bg-gray-800 p-4 rounded-lg">
+        <h2 className="text-xl font-bold mb-4 text-yellow-400">Mis Hechizos Preparados</h2>
+        
+        <div className="space-y-3">
+          <div>
+            <h3 className="font-semibold text-blue-300 mb-2">Cantrips (Ilimitados)</h3>
+            <div className="flex flex-wrap gap-2">
+              {preparedSpells.slice(0, 4).map(spell => (
+                <div key={spell} className="flex gap-1">
+                  <button
+                    onClick={() => {
+                      setSelectedSpell(spell);
+                      setShowSpellModal(true);
+                    }}
+                    className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-sm"
+                  >
+                    {spell}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSpellToCast(spell);
+                      setShowCastModal(true);
+                    }}
+                    className="px-2 py-1 bg-green-600 hover:bg-green-700 rounded text-sm"
+                    title="Lanzar hechizo"
+                  >
+                    ⚡
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          {[1, 2, 3, 4, 5].map(spellLevel => {
+            const spellsForLevel = preparedSpells.slice(4 + (spellLevel - 1) * 3, 4 + spellLevel * 3);
+            if (spellsForLevel.length === 0) return null;
+            
+            return (
+              <div key={spellLevel}>
+                <h3 className="font-semibold text-blue-300 mb-2">Nivel {spellLevel}</h3>
+                <div className="flex flex-wrap gap-2">
+                  {spellsForLevel.map(spell => (
+                    <div key={spell} className="flex gap-1">
+                      <button
+                        onClick={() => {
+                          setSelectedSpell(spell);
+                          setShowSpellModal(true);
+                        }}
+                        className="px-3 py-1 bg-purple-600 hover:bg-purple-700 rounded text-sm"
+                      >
+                        {spell}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSpellToCast(spell);
+                          setShowCastModal(true);
+                        }}
+                        className="px-2 py-1 bg-green-600 hover:bg-green-700 rounded text-sm"
+                        title="Lanzar hechizo"
+                      >
+                        ⚡
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
       
@@ -1128,6 +1767,80 @@ const ElementalistSheet = () => {
                 <div className="text-center text-gray-400 py-8">
                   <p>Descripción no disponible para este hechizo.</p>
                   <p className="text-sm mt-2">Hechizo: <strong>{selectedSpell}</strong></p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cast Spell Modal */}
+      {showCastModal && spellToCast && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={() => {
+            setShowCastModal(false);
+            setSpellToCast(null);
+          }}
+        >
+          <div 
+            className="bg-gray-800 rounded-lg max-w-md w-full border border-gray-600"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="bg-gray-800 p-4 border-b border-gray-600 flex justify-between items-center rounded-t-lg">
+              <h2 className="text-xl font-bold text-green-400">Lanzar {spellToCast}</h2>
+              <button
+                onClick={() => {
+                  setShowCastModal(false);
+                  setSpellToCast(null);
+                }}
+                className="text-gray-400 hover:text-white text-3xl font-bold w-12 h-12 flex items-center justify-center rounded hover:bg-gray-700"
+              >
+                ×
+              </button>
+            </div>
+            <div className="p-4">
+              {/* Cantrips don't need spell slots */}
+              {['Guidance', 'Druidcraft', 'Thorn Whip', 'Primal Savagery'].includes(spellToCast) ? (
+                <div className="text-center">
+                  <p className="text-blue-300 mb-4">Los cantrips se pueden lanzar ilimitadamente</p>
+                  <button
+                    onClick={() => {
+                      alert(`Has lanzado ${spellToCast} (Cantrip)`);
+                      setShowCastModal(false);
+                      setSpellToCast(null);
+                    }}
+                    className="px-6 py-2 bg-green-600 hover:bg-green-700 rounded font-bold"
+                  >
+                    ⚡ Lanzar Cantrip
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-gray-300 mb-4">Selecciona el nivel del espacio de conjuro:</p>
+                  <div className="space-y-2">
+                    {Object.entries(spellSlots).map(([slotLevel, slots]) => {
+                      if (slots.max === 0) return null;
+                      
+                      return (
+                        <button
+                          key={slotLevel}
+                          onClick={() => castSpell(spellToCast, parseInt(slotLevel))}
+                          disabled={slots.current <= 0}
+                          className={`w-full p-3 rounded text-left flex justify-between items-center ${
+                            slots.current > 0 
+                              ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                              : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                          }`}
+                        >
+                          <span>Nivel {slotLevel}</span>
+                          <span className="text-sm">
+                            {slots.current > 0 ? `${slots.current} disponibles` : 'Agotado'}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </div>
